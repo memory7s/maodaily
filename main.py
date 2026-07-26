@@ -1,6 +1,5 @@
 """
 AliveDaily — 桌面每日计划管理工具
-基于 Python + Flet (Flutter) 构建，参考「指尖时光」UI 风格
 
 使用方法:
   flet run main.py          # 开发模式 (热重载)
