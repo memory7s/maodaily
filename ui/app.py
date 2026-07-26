@@ -8,6 +8,7 @@ from .theme import PRIMARY, BG, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG
 from .sidebar import Sidebar
 from .task_card import TaskCard
 from datetime import datetime, timedelta
+from task_manager import TaskManager
 
 
 def build_header(on_calendar_toggle=None) -> ft.Container:
@@ -88,59 +89,6 @@ def build_add_bar(on_add) -> ft.Container:
 
 # ── 假数据（Phase 3 将替换为 task_manager.py） ──
 
-SAMPLE_TASKS = [
-    {
-        "id": "demo_1",
-        "title": "学习 Python Flet 框架",
-        "completed": False,
-        "tag": "学习",
-        "priority": "高",
-        "created_at": (datetime.now() - timedelta(hours=2)).isoformat(),
-        "steps": [
-            {"id": "s1", "description": "理解 Flet 控件树结构", "completed": True},
-            {"id": "s2", "description": "掌握 Container/Column/Row 布局", "completed": True},
-            {"id": "s3", "description": "实现自定义组件 (TaskCard)", "completed": False},
-            {"id": "s4", "description": "对接数据层 task_manager.py", "completed": False},
-        ],
-    },
-    {
-        "id": "demo_2",
-        "title": "完成 AliveDaily Phase 2",
-        "completed": False,
-        "tag": "工作",
-        "priority": "中",
-        "created_at": datetime.now().isoformat(),
-        "steps": [
-            {"id": "s5", "description": "创建 task_card.py 组件", "completed": True},
-            {"id": "s6", "description": "卡片交互事件绑定", "completed": False},
-            {"id": "s7", "description": "编译验证", "completed": False},
-        ],
-    },
-    {
-        "id": "demo_3",
-        "title": "超市采购清单",
-        "completed": False,
-        "tag": "生活",
-        "priority": "低",
-        "created_at": (datetime.now() - timedelta(days=1)).isoformat(),
-        "steps": [
-            {"id": "s8", "description": "鸡蛋、牛奶", "completed": False},
-            {"id": "s9", "description": "蔬菜水果", "completed": False},
-        ],
-    },
-    {
-        "id": "demo_4",
-        "title": "已完成的任务示例",
-        "completed": True,
-        "tag": "工作",
-        "priority": "高",
-        "created_at": (datetime.now() - timedelta(days=2)).isoformat(),
-        "steps": [
-            {"id": "s10", "description": "搭建 Python 环境", "completed": True},
-            {"id": "s11", "description": "安装依赖包", "completed": True},
-        ],
-    },
-]
 
 
 class DeskApp(ft.Container):
@@ -150,6 +98,7 @@ class DeskApp(ft.Container):
         super().__init__(expand=True, bgcolor=BG)
         self._page = page
         self._task_card_controls = []  # 所有 TaskCard 控件引用
+        self.task_manager = TaskManager()
 
         # 构建任务列表容器（内部是一个 Column + ScrollView）
         self._task_scroll = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
@@ -158,8 +107,8 @@ class DeskApp(ft.Container):
             expand=True,
         )
 
-        # 填入假数据
-        self._load_sample_tasks()
+        # 加载真实任务数据
+        self._load_tasks()
 
         # 布局: Row(侧栏 | 主区域)
         self.sidebar = Sidebar(on_navigate=self._on_navigate)
@@ -189,22 +138,20 @@ class DeskApp(ft.Container):
 
     # ── 假数据加载 ──
 
-    def _load_sample_tasks(self):
-        """用 SAMPLE_TASKS 填充任务列表"""
+    def _load_tasks(self):
+        """从 TaskManager 读取任务并填充 UI"""
         self._task_scroll.controls.clear()
         self._task_card_controls.clear()
-
-        # 分离进行中和已完成
-        active = [t for t in SAMPLE_TASKS if not t["completed"]]
-        completed = [t for t in SAMPLE_TASKS if t["completed"]]
-
-        for t in active:
-            card = self._build_card(t)
+        # 获取任务列表（Task 实例）
+        active = self.task_manager.get_active_tasks()
+        completed = self.task_manager.get_completed_tasks()
+        # 渲染进行中任务
+        for task in active:
+            card = self._build_card(task.to_dict())
             self._task_scroll.controls.append(card)
             self._task_card_controls.append(card)
-
+        # 渲染已完成任务并插入分隔线
         if completed:
-            # 已完成区域分隔线
             self._task_scroll.controls.append(
                 ft.Container(
                     content=ft.Row(
@@ -212,14 +159,14 @@ class DeskApp(ft.Container):
                             ft.Container(height=1, bgcolor="#E0E0E0", expand=True),
                             ft.Text(" 已完成 ", size=11, color=TEXT_SECONDARY),
                             ft.Container(height=1, bgcolor="#E0E0E0", expand=True),
-                        ],
+                            ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                     margin=ft.Margin.symmetric(vertical=12),
                 )
             )
-            for t in completed:
-                card = self._build_card(t)
+            for task in completed:
+                card = self._build_card(task.to_dict())
                 self._task_scroll.controls.append(card)
                 self._task_card_controls.append(card)
 
@@ -238,22 +185,35 @@ class DeskApp(ft.Container):
     # ── 事件回调（Phase 3 才真正操作数据，现在只打 log） ──
 
     def _on_card_toggle(self, task_data):
-        print(f"[toggle_task] {task_data['id']}")
+        # 切换任务完成状态
+        self.task_manager.toggle_task_complete(task_data['id'])
+        self._load_tasks()
 
     def _on_card_delete(self, task_data):
-        print(f"[delete_task] {task_data['id']}")
+        # 删除任务
+        self.task_manager.delete_task(task_data['id'])
+        self._load_tasks()
 
     def _on_card_title_edit(self, task_data, new_title):
-        print(f"[edit_title] {task_data['id']} -> {new_title}")
+        # 更新任务标题
+        self.task_manager.update_task_title(task_data['id'], new_title)
+        self._load_tasks()
 
     def _on_step_toggle(self, task_data, step_data):
-        print(f"[toggle_step] task={task_data['id']}, step={step_data['id']}")
+        # 切换步骤完成状态
+        self.task_manager.toggle_step_complete(task_data['id'], step_data['id'])
+        self._load_tasks()
 
     def _on_step_add(self, task_data, desc):
-        print(f"[add_step] task={task_data['id']}, desc={desc}")
+        # 添加步骤
+        self.task_manager.add_step(task_data['id'], desc)
+        self._load_tasks()
 
     def _on_step_edit(self, task_data, step_data):
-        print(f"[edit_step] task={task_data['id']}, step={step_data['id']}")
+        # 更新步骤描述
+        # step_data 中已经包含最新的 description（通过 TaskCard 编辑后更新）
+        self.task_manager.update_step_description(task_data['id'], step_data['id'], step_data.get('description', ''))
+        self._load_tasks()
 
     def _on_step_delete(self, task_data, step_data):
         print(f"[delete_step] task={task_data['id']}, step={step_data['id']}")
