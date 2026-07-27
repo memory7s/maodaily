@@ -87,6 +87,7 @@ class TaskCard(ft.Container):
     def __init__(
         self,
         task_data: dict,
+        page=None,
         on_toggle=None,
         on_delete=None,
         on_title_edit=None,
@@ -94,6 +95,7 @@ class TaskCard(ft.Container):
         on_step_add=None,
         on_step_edit=None,
         on_step_delete=None,
+        on_show_detail=None,
     ):
         self._data = task_data
         self._expanded = False
@@ -104,6 +106,8 @@ class TaskCard(ft.Container):
         self._on_step_add = on_step_add
         self._on_step_edit = on_step_edit
         self._on_step_delete = on_step_delete
+        self._on_show_detail = on_show_detail  # 点击标题时通知 App 切换详情面板
+        self._page = page
 
         completed = task_data.get("completed", False)
         steps = task_data.get("steps", [])
@@ -129,6 +133,13 @@ class TaskCard(ft.Container):
             color=title_color,
             expand=True,
         )
+        # 可点击容器包装标题（打开详情弹窗）
+        self.title_container = ft.Container(
+            content=self.title,
+            on_click=self._show_detail_dialog,
+            expand=True,
+            padding=ft.Padding.symmetric(horizontal=4),
+        )
 
         # 优先级标记
         priority_color = PRIORITY_COLORS.get(priority, "#ADB5BD")
@@ -137,13 +148,13 @@ class TaskCard(ft.Container):
         # 删除按钮
         self.del_btn = ft.Text("✕", size=14, color=TEXT_SECONDARY)
 
+        # ---- 任务头栏 ----
         header = ft.Row(
             controls=[
-                ft.Container(content=self.chk, on_click=self._toggle_complete),
-                self.title,
+ft.Container(content=self.chk, on_click=self._toggle_complete),
+                self.title_container,          # 可点击的标题
                 ft.Container(
                     content=self.priority_dot,
-                    on_click=None,
                     tooltip=priority or "无优先级",
                 ),
                 ft.Container(
@@ -155,6 +166,8 @@ class TaskCard(ft.Container):
             spacing=6,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
+        # 移除之前对 title 的点击绑定（已通过 GestureDispatcher）
+        # self.title.on_click = ...   # 不再需要
 
         # ── 步骤容器（初始隐藏） ──
         self._steps_col = ft.Column(spacing=2, visible=False)
@@ -194,7 +207,10 @@ class TaskCard(ft.Container):
         # 日期
         if created_at:
             bottom_items.append(
-                ft.Text(self._format_date(created_at), size=10, color=TEXT_SECONDARY)
+                ft.Text(
+    self._format_date(created_at),
+    size=10,
+     color=TEXT_SECONDARY)
             )
 
         # 进度
@@ -258,9 +274,9 @@ class TaskCard(ft.Container):
             margin=ft.Margin.only(bottom=8),
         )
 
-        # 标题点击展开/收起
-        self.title.on_click = self._toggle_expand
-        self.title.on_hover = self._title_hover
+        # 标题点击展开/收起 (已改为点击弹出详情编辑框)
+        # self.title.on_click = self._toggle_expand
+        # self.title.on_hover = self._title_hover
 
     # ── 公共方法 ──
     def update_data(self, task_data: dict):
@@ -350,3 +366,10 @@ class TaskCard(ft.Container):
             self._on_step_add(self._data, desc)
             e.control.value = ""
             e.control.update()
+
+    # ----- 点击标题 → 通知 App 切换右侧详情面板 -----
+    def _show_detail_dialog(self, e):
+        """通知 App：当前任务的详情面板开关"""
+        print("_show_detail_dialog called")
+        if self._on_show_detail:
+            self._on_show_detail(self._data)

@@ -44,6 +44,8 @@ class Task:
         task_id: str = None,
         created_at: str = None,
         completed_at: str = None,
+        tag: str = "",
+        priority: str = "",
     ):
         self.id = task_id or datetime.now().strftime("%Y%m%d%H%M%S%f")
         self.title = title
@@ -51,6 +53,8 @@ class Task:
         self.completed = completed
         self.created_at = created_at or datetime.now().isoformat()
         self.completed_at = completed_at
+        self.tag = tag
+        self.priority = priority
 
     def to_dict(self) -> dict:
         return {
@@ -60,6 +64,8 @@ class Task:
             "completed": self.completed,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
+            "tag": self.tag,
+            "priority": self.priority,
         }
 
     @classmethod
@@ -72,6 +78,8 @@ class Task:
             task_id=data.get("id"),
             created_at=data.get("created_at"),
             completed_at=data.get("completed_at"),
+            tag=data.get("tag", ""),
+            priority=data.get("priority", ""),
         )
 
 
@@ -108,8 +116,8 @@ class TaskManager:
 
     # ---------- 任务 CRUD ----------
 
-    def add_task(self, title: str) -> Task:
-        task = Task(title=title.strip())
+    def add_task(self, title: str, tag: str = "", priority: str = "") -> Task:
+        task = Task(title=title.strip(), tag=tag, priority=priority)
         self.tasks.append(task)
         self.save()
         return task
@@ -171,6 +179,15 @@ class TaskManager:
                         self.save()
                         return step.completed
         return False
+
+    def update_task(self, task_data: dict):
+        """根据完整 dict 更新任务（标题 + 步骤），用于弹窗统一保存"""
+        for task in self.tasks:
+            if task.id == task_data['id']:
+                task.title = task_data.get('title', task.title)
+                task.steps = [TaskStep.from_dict(s) for s in task_data.get('steps', [])]
+                self.save()
+                return
 
     # ---------- 查询 ----------
 

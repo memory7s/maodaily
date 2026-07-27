@@ -100,6 +100,13 @@ class DeskApp(ft.Container):
         self._task_card_controls = []  # 所有 TaskCard 控件引用
         self.task_manager = TaskManager()
 
+        # 详情面板状态
+        self._detail_task_id = None
+        self._detail_data = None
+        self._detail_title_field = None
+        self._detail_step_fields = []
+        self._detail_steps_col = None
+
         # 构建任务列表容器（内部是一个 Column + ScrollView）
         self._task_scroll = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self._task_list_container = ft.Container(
@@ -107,12 +114,23 @@ class DeskApp(ft.Container):
             expand=True,
         )
 
+        # 构建右侧详情面板（初始隐藏，无内容）
+        self._detail_panel = ft.Container(
+            content=ft.Text(""),
+            bgcolor=CARD_BG,
+            border_radius=ft.BorderRadius.all(10),
+            padding=ft.Padding.only(left=16, top=16, right=24, bottom=16),
+            visible=False,
+            expand=True,
+        )
+        self._detail_divider = ft.VerticalDivider(width=1, color="#E0E0E0", visible=False)
+
         # 加载真实任务数据
         self._load_tasks()
 
-        # 布局: Row(侧栏 | 主区域)
+        # 布局: Row(侧栏 | 任务列表 + 可能的分隔线 + 详情面板)
         self.sidebar = Sidebar(on_navigate=self._on_navigate)
-        self.main_area = ft.Container(
+        self._task_area = ft.Container(
             content=ft.Column(
                 controls=[
                     build_header(),
@@ -123,7 +141,24 @@ class DeskApp(ft.Container):
                 expand=True,
             ),
             expand=True,
-            padding=ft.Padding.only(left=24, right=24, top=20, bottom=20),
+            padding=ft.Padding.only(left=24, right=12, top=20, bottom=20),
+        )
+
+        # 详情面板区域
+        self._detail_area = ft.Container(
+            content=self._detail_panel,
+            expand=True,
+            padding=ft.Padding.only(left=12, right=24, top=20, bottom=20),
+            visible=False,
+        )
+
+        self.main_area = ft.Container(
+            content=ft.Row(
+                controls=[self._task_area, self._detail_divider, self._detail_area],
+                expand=True,
+                spacing=0,
+            ),
+            expand=True,
         )
 
         self.content = ft.Row(
@@ -169,10 +204,13 @@ class DeskApp(ft.Container):
                 card = self._build_card(task.to_dict())
                 self._task_scroll.controls.append(card)
                 self._task_card_controls.append(card)
+        # 刷新页面显示
+        self._page.update()
 
     def _build_card(self, task_data: dict) -> TaskCard:
         return TaskCard(
             task_data=task_data,
+            page=self._page,
             on_toggle=self._on_card_toggle,
             on_delete=self._on_card_delete,
             on_title_edit=self._on_card_title_edit,
@@ -180,43 +218,235 @@ class DeskApp(ft.Container):
             on_step_add=self._on_step_add,
             on_step_edit=self._on_step_edit,
             on_step_delete=self._on_step_delete,
+            on_show_detail=self._on_card_show_detail,
         )
 
-    # ── 事件回调（Phase 3 才真正操作数据，现在只打 log） ──
+    # ── 卡片行内事件回调 ──
 
     def _on_card_toggle(self, task_data):
-        # 切换任务完成状态
         self.task_manager.toggle_task_complete(task_data['id'])
         self._load_tasks()
 
     def _on_card_delete(self, task_data):
-        # 删除任务
         self.task_manager.delete_task(task_data['id'])
         self._load_tasks()
 
     def _on_card_title_edit(self, task_data, new_title):
-        # 更新任务标题
         self.task_manager.update_task_title(task_data['id'], new_title)
         self._load_tasks()
 
     def _on_step_toggle(self, task_data, step_data):
-        # 切换步骤完成状态
         self.task_manager.toggle_step_complete(task_data['id'], step_data['id'])
         self._load_tasks()
 
     def _on_step_add(self, task_data, desc):
-        # 添加步骤
         self.task_manager.add_step(task_data['id'], desc)
         self._load_tasks()
 
     def _on_step_edit(self, task_data, step_data):
-        # 更新步骤描述
-        # step_data 中已经包含最新的 description（通过 TaskCard 编辑后更新）
         self.task_manager.update_step_description(task_data['id'], step_data['id'], step_data.get('description', ''))
         self._load_tasks()
 
     def _on_step_delete(self, task_data, step_data):
         print(f"[delete_step] task={task_data['id']}, step={step_data['id']}")
+
+    # ── 右侧详情面板 ──
+
+    def _on_card_show_detail(self, task_data: dict):
+        """点击任务标题：切换右侧详情面板"""
+        task_id = task_data['id']
+        if self._detail_task_id == task_id:
+            # 同一任务 → 关闭面板
+            self._save_detail()
+            self._load_tasks()
+            self._hide_detail_panel()
+        else:
+            # 不同任务 → 保存前一个 + 显示新任务
+            if self._detail_task_id is not None:
+                self._save_detail()
+                self._load_tasks()
+            self._show_detail_panel(task_data)
+
+    def _show_detail_panel(self, task_data: dict):
+        """显示右侧详情面板"""
+        self._detail_task_id = task_data['id']
+        self._detail_data = task_data.copy()  # 复制一份，避免直接修改原数据
+
+        # 标题编辑框
+        self._detail_title_field = ft.TextField(
+            value=self._detail_data.get('title', ''),
+            hint_text="任务标题",
+        )
+
+        # 步骤容器
+        self._detail_steps_col = ft.Column(
+            controls=[],
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+        # 步骤列表：每个步骤 = ○/● 勾选圈 + 编辑框 + 删除按钮
+        # 存储结构：{'chk': Text, 'tf': TextField, 'step': step_dict, 'row': Row}
+        self._detail_step_fields = []
+        for step in self._detail_data.get('steps', []):
+            self._build_step_row(step)
+
+        # 添加步骤输入框
+        self._detail_add_step_field = ft.TextField(
+            hint_text="添加步骤...",
+            on_submit=self._on_detail_add_step,
+        )
+
+        # 面板内容（无"标题""步骤"标签）
+        panel_content = ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        ft.Text("任务详情", size=18, weight=ft.FontWeight.BOLD),
+                        ft.TextButton("✕", on_click=lambda e: self._on_detail_close()),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                ft.Divider(),
+                self._detail_title_field,
+                ft.Divider(),
+                self._detail_steps_col,
+                self._detail_add_step_field,
+            ],
+            spacing=8,
+            expand=True,
+        )
+
+        self._detail_panel.content = panel_content
+        self._detail_panel.visible = True
+        self._detail_area.visible = True
+        self._detail_divider.visible = True
+        self._task_area.expand = 1
+        self._page.update()
+
+    def _build_step_row(self, step: dict):
+        """构建单条步骤行：○/● 勾选圈 + 编辑框（已完成=灰+删除线） + ⋯ 菜单"""
+        sid = step['id']
+        completed = step.get('completed', False)
+
+        # 勾选圈
+        chk = ft.Text("●" if completed else "○", size=16, width=22,
+                      color="#ADB5BD" if completed else TEXT_PRIMARY)
+
+        # 编辑框：已完成 → 灰色 + 删除线；未完成 → 正常
+        tf_style = ft.TextStyle(
+            color="#ADB5BD" if completed else TEXT_PRIMARY,
+            decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
+        )
+        tf = ft.TextField(
+            value=step.get('description', ''),
+            hint_text="步骤",
+            expand=True,
+            text_style=tf_style,
+            color="#ADB5BD" if completed else TEXT_PRIMARY,
+        )
+
+        # ⋯ 菜单按钮（不占右侧空间，避免被滚动条遮挡）
+        menu_btn = ft.PopupMenuButton(
+            items=[
+                ft.PopupMenuItem(
+                    content=ft.Text("标记为未完成" if completed else "标记为已完成"),
+                    on_click=lambda e, sid=sid: self._on_detail_toggle_step(sid),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("删除步骤"),
+                    on_click=lambda e, sid=sid: self._on_detail_delete_step(sid),
+                ),
+            ],
+        )
+
+        row = ft.Row(
+            controls=[
+                ft.Container(content=chk, on_click=lambda e, sid=sid: self._on_detail_toggle_step(sid)),
+                tf,
+                menu_btn,
+            ],
+            spacing=4,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        self._detail_step_fields.append({'chk': chk, 'tf': tf, 'step': step, 'row': row})
+        self._detail_steps_col.controls.append(row)
+
+    def _on_detail_toggle_step(self, step_id: str):
+        """切换步骤完成状态（同步更新勾选圈 + 删除线 + 颜色）"""
+        for item in self._detail_step_fields:
+            if item['step']['id'] == step_id:
+                completed = not item['step']['completed']
+                item['step']['completed'] = completed
+                # 勾选圈
+                item['chk'].value = "●" if completed else "○"
+                item['chk'].color = "#ADB5BD" if completed else TEXT_PRIMARY
+                # 编辑框：文字样式
+                item['tf'].text_style = ft.TextStyle(
+                    color="#ADB5BD" if completed else TEXT_PRIMARY,
+                    decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
+                )
+                item['tf'].color = "#ADB5BD" if completed else TEXT_PRIMARY
+                # 更新菜单文字
+                menu_btn = item['row'].controls[-1]
+                menu_btn.items[0].content.value = "标记为未完成" if completed else "标记为已完成"
+                break
+        self._detail_panel.update()
+
+    def _on_detail_delete_step(self, step_id: str):
+        """详情面板中删除步骤"""
+        # 从数据中移除
+        self._detail_data['steps'] = [
+            s for s in self._detail_data['steps'] if s['id'] != step_id
+        ]
+        # 从 UI 中移除
+        self._detail_step_fields = [
+            item for item in self._detail_step_fields if item['step']['id'] != step_id
+        ]
+        self._detail_steps_col.controls = [
+            item['row'] for item in self._detail_step_fields
+        ]
+        self._detail_panel.update()
+
+    def _hide_detail_panel(self):
+        """隐藏右侧详情面板（不重载，由调用方决定）"""
+        self._detail_task_id = None
+        self._detail_data = None
+        self._detail_panel.visible = False
+        self._detail_area.visible = False
+        self._detail_divider.visible = False
+        self._task_area.expand = True
+        self._page.update()
+
+    def _on_detail_close(self):
+        """点击 ✕ 关闭面板"""
+        self._save_detail()
+        self._load_tasks()
+        self._hide_detail_panel()
+
+    def _on_detail_add_step(self, e):
+        """在详情面板中添加步骤（带勾选圈 + 删除按钮）"""
+        desc = e.control.value.strip()
+        if not desc:
+            return
+        import time
+        new_step = {'id': str(int(time.time() * 1000)), 'description': desc, 'completed': False}
+        if 'steps' not in self._detail_data:
+            self._detail_data['steps'] = []
+        self._detail_data['steps'].append(new_step)
+        self._build_step_row(new_step)
+        e.control.value = ""
+        self._detail_panel.update()
+
+    def _save_detail(self):
+        """读取面板字段，持久化"""
+        if self._detail_data is None:
+            return
+        self._detail_data['title'] = self._detail_title_field.value.strip()
+        for item in self._detail_step_fields:
+            item['step']['description'] = item['tf'].value.strip()
+        self.task_manager.update_task(self._detail_data)
 
     def _on_navigate(self, key: str):
         """切换页面"""
@@ -224,6 +454,7 @@ class DeskApp(ft.Container):
         # 后续实现: 根据 key 切换 content
 
     def _on_add_task(self, title: str):
-        """添加任务回调"""
-        print(f"[add_task] {title}")
-        # 后续 Phase 3 实现
+        """添加任务回调 – Phase 4 实现任务新增"""
+        # 直接使用 TaskManager 添加任务（默认无 tag、priority）
+        self.task_manager.add_task(title)
+        self._load_tasks()
