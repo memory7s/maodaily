@@ -10,14 +10,17 @@ class Sidebar(ft.Container):
     """左侧导航栏组件"""
 
     NAV_ITEMS = [
-        ("📋", "今日计划", "today"),
-        ("📅", "日历视图", "calendar"),
-        ("🏷", "分类", "tags"),
+        ("📋", "全部", "all"),
+        ("💼", "工作", "tag:工作"),
+        ("📚", "学习", "tag:学习"),
+        ("🏠", "生活", "tag:生活"),
+        ("📭", "无分类", "tag:"),
+        ("📅", "日历", "calendar"),
     ]
 
     def __init__(self, on_navigate=None):
         self.on_navigate = on_navigate
-        self._active = "today"
+        self._active = "all"
         self._nav_controls = []
 
         super().__init__(

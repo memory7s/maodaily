@@ -97,6 +97,7 @@ class TaskCard(ft.Container):
         on_step_delete=None,
         on_show_detail=None,
         on_star=None,
+        on_tag=None,
     ):
         self._data = task_data
         self._expanded = False
@@ -109,6 +110,7 @@ class TaskCard(ft.Container):
         self._on_step_delete = on_step_delete
         self._on_show_detail = on_show_detail  # 点击标题时通知 App 切换详情面板
         self._on_star = on_star  # 右键标星回调
+        self._on_tag = on_tag  # 标签变更回调
         self._page = page
 
         completed = task_data.get("completed", False)
@@ -153,7 +155,7 @@ class TaskCard(ft.Container):
             color="#FF8700" if priority in ("高", "high") else "#CCCCCC",
         )
 
-# ⋯ 菜单按钮（标记完成 / 标星 / 删除）
+# ⋯ 菜单按钮（标记完成 / 标星 / 分类 / 删除）
         menu_btn = ft.PopupMenuButton(
             items=[
                 ft.PopupMenuItem(
@@ -165,6 +167,22 @@ class TaskCard(ft.Container):
                         "取消标星" if priority in ("高", "high") else "标星重要任务"
                     ),
                     on_click=lambda e: self._do_card_star(),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("分类：工作"),
+                    on_click=lambda e: self._do_card_tag("工作"),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("分类：学习"),
+                    on_click=lambda e: self._do_card_tag("学习"),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("分类：生活"),
+                    on_click=lambda e: self._do_card_tag("生活"),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("分类：无分类"),
+                    on_click=lambda e: self._do_card_tag(""),
                 ),
                 ft.PopupMenuItem(
                     content=ft.Text("删除任务"),
@@ -453,6 +471,11 @@ class TaskCard(ft.Container):
         """⋯ 菜单按钮：标星/取消标星"""
         if self._on_star:
             self._on_star(self._data)
+
+    def _do_card_tag(self, tag: str):
+        """⋯ 菜单按钮：设置分类"""
+        if self._on_tag:
+            self._on_tag(self._data, tag)
 
     def _do_card_delete(self):
         """⋯ 菜单按钮：删除任务"""

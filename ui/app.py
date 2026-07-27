@@ -22,7 +22,7 @@ def build_header(on_calendar_toggle=None) -> ft.Container:
             controls=[
                 ft.Column(
                     controls=[
-                        ft.Text("今日计划", size=22, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                        ft.Text("计划与进展", size=22, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
                         ft.Text(date_str, size=12, color=TEXT_SECONDARY),
                     ],
                     spacing=2,
@@ -100,6 +100,9 @@ class DeskApp(ft.Container):
         self._task_card_controls = []  # 所有 TaskCard 控件引用
         self.task_manager = TaskManager()
 
+        # 当前 tag 筛选（None=全部，字符串=特定 tag）
+        self._current_tag_filter = None
+
         # 详情面板状态
         self._detail_task_id = None
         self._detail_data = None
@@ -126,7 +129,7 @@ class DeskApp(ft.Container):
         self._detail_divider = ft.VerticalDivider(width=1, color="#E0E0E0", visible=False)
 
         # 加载真实任务数据
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
         # 布局: Row(侧栏 | 任务列表 + 可能的分隔线 + 详情面板)
         self.sidebar = Sidebar(on_navigate=self._on_navigate)
@@ -173,13 +176,13 @@ class DeskApp(ft.Container):
 
     # ── 假数据加载 ──
 
-    def _load_tasks(self):
-        """从 TaskManager 读取任务并填充 UI"""
+    def _load_tasks(self, tag_filter: str = None):
+        """从 TaskManager 读取任务并填充 UI，可按 tag 筛选"""
         self._task_scroll.controls.clear()
         self._task_card_controls.clear()
         # 获取任务列表（Task 实例）
-        active = self.task_manager.get_active_tasks()
-        completed = self.task_manager.get_completed_tasks()
+        active = self.task_manager.get_active_tasks(tag_filter)
+        completed = self.task_manager.get_completed_tasks(tag_filter)
         # 渲染进行中任务
         for task in active:
             card = self._build_card(task.to_dict())
@@ -220,39 +223,45 @@ class DeskApp(ft.Container):
             on_step_delete=self._on_step_delete,
             on_show_detail=self._on_card_show_detail,
             on_star=self._on_card_star,
+            on_tag=self._on_card_tag,
         )
 
     # ── 卡片行内事件回调 ──
 
     def _on_card_toggle(self, task_data):
         self.task_manager.toggle_task_complete(task_data['id'])
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
     def _on_card_delete(self, task_data):
         self.task_manager.delete_task(task_data['id'])
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
     def _on_card_title_edit(self, task_data, new_title):
         self.task_manager.update_task_title(task_data['id'], new_title)
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
     def _on_step_toggle(self, task_data, step_data):
         self.task_manager.toggle_step_complete(task_data['id'], step_data['id'])
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
     def _on_step_add(self, task_data, desc):
         self.task_manager.add_step(task_data['id'], desc)
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
     def _on_step_edit(self, task_data, step_data):
         self.task_manager.update_step_description(task_data['id'], step_data['id'], step_data.get('description', ''))
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
 
     def _on_card_star(self, task_data):
         """标星切换：设置/取消高优先级"""
         new_priority = "" if task_data.get('priority') in ('高', 'high') else "高"
         self.task_manager.update_task_priority(task_data['id'], new_priority)
-        self._load_tasks()
+        self._load_tasks(self._current_tag_filter)
+
+    def _on_card_tag(self, task_data, tag: str):
+        """分类切换：设置/清除 tag"""
+        self.task_manager.update_task_tag(task_data['id'], tag)
+        self._load_tasks(self._current_tag_filter)
 
     def _on_step_delete(self, task_data, step_data):
         print(f"[delete_step] task={task_data['id']}, step={step_data['id']}")
@@ -265,13 +274,13 @@ class DeskApp(ft.Container):
         if self._detail_task_id == task_id:
             # 同一任务 → 关闭面板
             self._save_detail()
-            self._load_tasks()
+            self._load_tasks(self._current_tag_filter)
             self._hide_detail_panel()
         else:
             # 不同任务 → 保存前一个 + 显示新任务
             if self._detail_task_id is not None:
                 self._save_detail()
-                self._load_tasks()
+                self._load_tasks(self._current_tag_filter)
             self._show_detail_panel(task_data)
 
     def _show_detail_panel(self, task_data: dict):
@@ -304,16 +313,10 @@ class DeskApp(ft.Container):
             on_submit=self._on_detail_add_step,
         )
 
-        # 面板内容（无"标题""步骤"标签）
+        # 面板内容（无"标题""步骤"标签，关闭通过点击同一条标题）
         panel_content = ft.Column(
             controls=[
-                ft.Row(
-                    controls=[
-                        ft.Text("任务详情", size=18, weight=ft.FontWeight.BOLD),
-                        ft.TextButton("✕", on_click=lambda e: self._on_detail_close()),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                ),
+                ft.Text("任务详情", size=18, weight=ft.FontWeight.BOLD),
                 self._detail_title_field,
                 self._detail_steps_col,
                 self._detail_add_step_field,
@@ -424,12 +427,6 @@ class DeskApp(ft.Container):
         self._task_area.expand = True
         self._page.update()
 
-    def _on_detail_close(self):
-        """点击 ✕ 关闭面板"""
-        self._save_detail()
-        self._load_tasks()
-        self._hide_detail_panel()
-
     def _on_detail_add_step(self, e):
         """在详情面板中添加步骤（带勾选圈 + 删除按钮）"""
         desc = e.control.value.strip()
@@ -454,12 +451,17 @@ class DeskApp(ft.Container):
         self.task_manager.update_task(self._detail_data)
 
     def _on_navigate(self, key: str):
-        """切换页面"""
+        """切换页面 / 筛选"""
         print(f"[navigate] -> {key}")
-        # 后续实现: 根据 key 切换 content
+        if key == "today" or key == "all":
+            self._current_tag_filter = None
+        elif key.startswith("tag:"):
+            self._current_tag_filter = key[4:]  # 去掉 "tag:"
+        else:
+            return
+        self._load_tasks(self._current_tag_filter)
 
     def _on_add_task(self, title: str):
-        """添加任务回调 – Phase 4 实现任务新增"""
-        # 直接使用 TaskManager 添加任务（默认无 tag、priority）
-        self.task_manager.add_task(title)
-        self._load_tasks()
+        """添加任务回调 – 带上当前 tag 筛选"""
+        self.task_manager.add_task(title, tag=self._current_tag_filter or "")
+        self._load_tasks(self._current_tag_filter)

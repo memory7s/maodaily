@@ -151,6 +151,14 @@ class TaskManager:
                 self.save()
                 return
 
+    def update_task_tag(self, task_id: str, tag: str):
+        """设置任务分类"""
+        for task in self.tasks:
+            if task.id == task_id:
+                task.tag = tag
+                self.save()
+                return
+
     # ---------- 步骤 CRUD ----------
 
     def add_step(self, task_id: str, description: str) -> Optional[TaskStep]:
@@ -197,14 +205,20 @@ class TaskManager:
                 self.save()
                 return
 
-    # ---------- 查询 ----------
-
-    def get_active_tasks(self) -> List[Task]:
-        return [t for t in self.tasks if not t.completed]
-
-    def get_completed_tasks(self) -> List[Task]:
-        return [t for t in self.tasks if t.completed]
-
+# ---------- 查询 ---------- 查询 ----------
+ 
+    def get_active_tasks(self, tag: str = None) -> List[Task]:
+        tasks = [t for t in self.tasks if not t.completed]
+        if tag is not None:
+            tasks = [t for t in tasks if t.tag == tag]
+        return tasks
+ 
+    def get_completed_tasks(self, tag: str = None) -> List[Task]:
+        tasks = [t for t in self.tasks if t.completed]
+        if tag is not None:
+            tasks = [t for t in tasks if t.tag == tag]
+        return tasks
+ 
     def get_task_count_by_date(self) -> dict:
         """返回 {YYYY-MM-DD: 任务数} 字典，供万年历标记使用"""
         counts: dict = {}
