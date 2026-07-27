@@ -96,6 +96,7 @@ class TaskCard(ft.Container):
         on_step_edit=None,
         on_step_delete=None,
         on_show_detail=None,
+        on_star=None,
     ):
         self._data = task_data
         self._expanded = False
@@ -107,6 +108,7 @@ class TaskCard(ft.Container):
         self._on_step_edit = on_step_edit
         self._on_step_delete = on_step_delete
         self._on_show_detail = on_show_detail  # 点击标题时通知 App 切换详情面板
+        self._on_star = on_star  # 右键标星回调
         self._page = page
 
         completed = task_data.get("completed", False)
@@ -133,35 +135,55 @@ class TaskCard(ft.Container):
             color=title_color,
             expand=True,
         )
-        # 可点击容器包装标题（打开详情弹窗）
+        # GestureDetector 包装标题：点击 → 详情面板，长按/右键 → 菜单
         self.title_container = ft.Container(
-            content=self.title,
-            on_click=self._show_detail_dialog,
+            content=ft.GestureDetector(
+                content=self.title,
+                on_tap=self._show_detail_dialog,
+                on_long_press=self._show_card_menu,
+            ),
             expand=True,
             padding=ft.Padding.symmetric(horizontal=4),
         )
 
-        # 优先级标记
-        priority_color = PRIORITY_COLORS.get(priority, "#ADB5BD")
-        self.priority_dot = ft.Text("●", size=12, color=priority_color)
+        # 优先级标记：标星任务 ⭐，未标星 ☆
+        self.priority_dot = ft.Text(
+            "⭐" if priority in ("高", "high") else "☆",
+            size=16, width=20, text_align=ft.TextAlign.CENTER,
+            color="#FF8700" if priority in ("高", "high") else "#CCCCCC",
+        )
 
-        # 删除按钮
-        self.del_btn = ft.Text("✕", size=14, color=TEXT_SECONDARY)
+# ⋯ 菜单按钮（标记完成 / 标星 / 删除）
+        menu_btn = ft.PopupMenuButton(
+            items=[
+                ft.PopupMenuItem(
+                    content=ft.Text("标记为未完成" if completed else "标记为已完成"),
+                    on_click=lambda e: self._do_card_toggle(),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text(
+                        "取消标星" if priority in ("高", "high") else "标星重要任务"
+                    ),
+                    on_click=lambda e: self._do_card_star(),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("删除任务"),
+                    on_click=lambda e: self._do_card_delete(),
+                ),
+            ],
+        )
 
         # ---- 任务头栏 ----
         header = ft.Row(
             controls=[
-ft.Container(content=self.chk, on_click=self._toggle_complete),
-                self.title_container,          # 可点击的标题
+                ft.Container(content=self.chk, on_click=self._toggle_complete),
+                self.title_container,          # 可点击的标题 → 详情面板
                 ft.Container(
                     content=self.priority_dot,
                     tooltip=priority or "无优先级",
+                    on_click=lambda e: self._do_card_star(),
                 ),
-                ft.Container(
-                    content=self.del_btn,
-                    on_click=self._delete_task,
-                    on_hover=self._del_hover,
-                ),
+                menu_btn,
             ],
             spacing=6,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -373,3 +395,66 @@ ft.Container(content=self.chk, on_click=self._toggle_complete),
         print("_show_detail_dialog called")
         if self._on_show_detail:
             self._on_show_detail(self._data)
+
+    # ----- ⋯ 菜单操作 -----
+    def _show_card_menu(self, e=None):
+        """长按标题 / 右键 → 弹出菜单"""
+        completed = self._data.get('completed', False)
+        is_starred = self._data.get('priority') in ('高', 'high')
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("任务操作"),
+            actions=[
+                ft.TextButton(
+                    "标记为未完成" if completed else "标记为已完成",
+                    on_click=lambda ev: self._do_rc_toggle(dlg),
+                ),
+                ft.TextButton(
+                    "取消标星" if is_starred else "标星重要任务",
+                    on_click=lambda ev: self._do_rc_star(dlg),
+                ),
+                ft.TextButton(
+                    "删除任务",
+                    on_click=lambda ev: self._do_rc_delete(dlg),
+                ),
+                ft.TextButton("取消", on_click=lambda ev: self._dismiss_dlg(dlg)),
+            ],
+        )
+        self._page.dialog = dlg
+        dlg.open = True
+        self._page.update()
+
+    def _dismiss_dlg(self, dlg):
+        dlg.open = False
+        self._page.update()
+
+    def _do_rc_toggle(self, dlg):
+        self._dismiss_dlg(dlg)
+        if self._on_toggle:
+            self._on_toggle(self._data)
+
+    def _do_rc_star(self, dlg):
+        self._dismiss_dlg(dlg)
+        if self._on_star:
+            self._on_star(self._data)
+
+    def _do_rc_delete(self, dlg):
+        self._dismiss_dlg(dlg)
+        if self._on_delete:
+            self._on_delete(self._data)
+
+    def _do_card_toggle(self):
+        """⋯ 菜单按钮：标记完成/未完成"""
+        if self._on_toggle:
+            self._on_toggle(self._data)
+
+    def _do_card_star(self):
+        """⋯ 菜单按钮：标星/取消标星"""
+        if self._on_star:
+            self._on_star(self._data)
+
+    def _do_card_delete(self):
+        """⋯ 菜单按钮：删除任务"""
+        if self._on_delete:
+            self._on_delete(self._data)

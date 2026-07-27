@@ -219,6 +219,7 @@ class DeskApp(ft.Container):
             on_step_edit=self._on_step_edit,
             on_step_delete=self._on_step_delete,
             on_show_detail=self._on_card_show_detail,
+            on_star=self._on_card_star,
         )
 
     # ── 卡片行内事件回调 ──
@@ -245,6 +246,12 @@ class DeskApp(ft.Container):
 
     def _on_step_edit(self, task_data, step_data):
         self.task_manager.update_step_description(task_data['id'], step_data['id'], step_data.get('description', ''))
+        self._load_tasks()
+
+    def _on_card_star(self, task_data):
+        """标星切换：设置/取消高优先级"""
+        new_priority = "" if task_data.get('priority') in ('高', 'high') else "高"
+        self.task_manager.update_task_priority(task_data['id'], new_priority)
         self._load_tasks()
 
     def _on_step_delete(self, task_data, step_data):
@@ -307,9 +314,7 @@ class DeskApp(ft.Container):
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 ),
-                ft.Divider(),
                 self._detail_title_field,
-                ft.Divider(),
                 self._detail_steps_col,
                 self._detail_add_step_field,
             ],

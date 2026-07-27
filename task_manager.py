@@ -143,6 +143,14 @@ class TaskManager:
                 self.save()
                 return
 
+    def update_task_priority(self, task_id: str, priority: str):
+        """设置任务优先级（空字符串 = 取消）"""
+        for task in self.tasks:
+            if task.id == task_id:
+                task.priority = priority
+                self.save()
+                return
+
     # ---------- 步骤 CRUD ----------
 
     def add_step(self, task_id: str, description: str) -> Optional[TaskStep]:
