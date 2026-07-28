@@ -10,6 +10,7 @@ AliveDaily — 桌面每日计划管理工具
 import flet as ft
 from ui.theme import build_theme
 from ui.app import DeskApp
+from reminder_service import start_reminder_service
 
 
 def main(page: ft.Page):
@@ -23,6 +24,9 @@ def main(page: ft.Page):
     page.spacing = 0
     page.bgcolor = "#F5F5F5"
     page.theme = build_theme()
+
+    # ── 启动后台提醒服务 ──
+    start_reminder_service()
 
     # ── 挂载主应用 ──
     app = DeskApp(page)

@@ -7,7 +7,7 @@ import flet as ft
 from .theme import PRIMARY, BG, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG
 from .sidebar import Sidebar
 from .task_card import TaskCard
-from datetime import datetime, timedelta
+from datetime import datetime
 from task_manager import TaskManager
 
 
@@ -323,10 +323,40 @@ class DeskApp(ft.Container):
             expand=True,
         )
 
-        # 步骤数据
+        # 步骤数据（步骤之间插入细分割线）
         self._detail_step_fields = []
-        for step in self._detail_data.get('steps', []):
+        steps = self._detail_data.get('steps', [])
+        for i, step in enumerate(steps):
+            if i > 0:
+                self._detail_steps_col.controls.append(
+                    ft.Divider(height=1, color="#F0F0F0")
+                )
             self._build_step_row(step)
+
+        # ── 添加步骤输入框（放在步骤列表末尾）──
+        self._detail_add_step_field = ft.TextField(
+            hint_text="添加步骤...",
+            hint_style=ft.TextStyle(color="#4DABF7", size=13),
+            on_submit=self._on_detail_add_step,
+            border=ft.InputBorder.NONE,
+            color="#4DABF7",
+            dense=True,
+            expand=True,
+        )
+        self._detail_add_step_row = ft.Row(
+            controls=[
+                ft.Text("", width=LABEL_W),
+                self._detail_add_step_field,
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        # 步骤多于 0 条时加分割线
+        if len(steps) > 0:
+            self._detail_steps_col.controls.append(
+                ft.Divider(height=1, color="#F0F0F0")
+            )
+        self._detail_steps_col.controls.append(self._detail_add_step_row)
 
         # 步骤列表整体用 row_container 包裹（含 70px 标签列占位）
         steps_row = row_container(self._detail_steps_col, expand=True)
@@ -375,6 +405,25 @@ class DeskApp(ft.Container):
         )
 
         # 提醒区：统一 70px 标签列
+        # 状态文字（保存/删除后显示）
+        self._reminder_status_text = ft.Text("", size=12, color="#4CAF50")
+        self._reminder_status_row = ft.Row([
+            ft.Text("", width=LABEL_W),
+            self._reminder_status_text,
+        ], spacing=8)
+
+        # 判断是否已有提醒
+        has_existing = bool(self._detail_data.get('reminder_date', ''))
+
+        # 保存按钮
+        self._reminder_save_btn = ft.TextButton(
+            "保存提醒",
+            icon=ft.Icons.SAVE,
+            on_click=lambda e: self._save_reminder(),
+            style=ft.ButtonStyle(color=PRIMARY),
+            disabled=has_existing,
+        )
+
         reminder_row = row_container(
             ft.Column([
                 # 第1行：🔔 提醒我 + 日期 + 时间
@@ -393,43 +442,31 @@ class DeskApp(ft.Container):
                     ft.Text("", width=LABEL_W),
                     self._reminder_freq_radio,
                 ], spacing=8),
-                # 第4行：保存提醒按钮
+                # 第4行：保存提醒 + 删除提醒按钮
                 ft.Row([
                     ft.Text("", width=LABEL_W),
+                    self._reminder_save_btn,
                     ft.TextButton(
-                        "保存提醒",
-                        icon=ft.Icons.SAVE,
-                        on_click=lambda e: self._save_reminder(),
-                        style=ft.ButtonStyle(color=PRIMARY),
+                        "删除提醒",
+                        icon=ft.Icons.DELETE,
+                        on_click=lambda e: self._delete_reminder(),
+                        style=ft.ButtonStyle(color="#E4405F"),
                     ),
                 ], spacing=8),
+                # 第5行：状态显示
+                self._reminder_status_row,
             ], spacing=6),
         )
 
-        # ── 添加步骤输入行：空标签 + 输入框 ──
-        self._detail_add_step_field = ft.TextField(
-            hint_text="添加步骤...",
-            on_submit=self._on_detail_add_step,
-            border=ft.InputBorder.NONE,
-            dense=True,
-            expand=True,
-        )
-        add_step_row = row_container(
-            ft.Row([
-                ft.Text("", width=LABEL_W),
-                self._detail_add_step_field,
-            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        )
-
-        # ── 面板主体：标题/步骤/提醒/新增步骤 统一网格对齐 ──
+        # ── 面板主体：标题/步骤/提醒 统一网格对齐 ──
         panel_content = ft.Column(
             controls=[
                 title_row,
                 steps_row,
+                ft.Divider(height=1, color="#E0E0E0"),
                 reminder_row,
-                add_step_row,
             ],
-            spacing=10,
+            spacing=6,
             expand=True,
         )
 
@@ -524,10 +561,22 @@ class DeskApp(ft.Container):
         self._detail_step_fields = [
             item for item in self._detail_step_fields if item['step']['id'] != step_id
         ]
-        self._detail_steps_col.controls = [
-            item['row'] for item in self._detail_step_fields
-        ]
+        self._rebuild_detail_steps_controls()
         self._detail_panel.update()
+
+    def _rebuild_detail_steps_controls(self):
+        """重建步骤列表控件，在步骤行之间插入分割线，末尾保留添加输入框"""
+        controls = []
+        for i, item in enumerate(self._detail_step_fields):
+            if i > 0:
+                controls.append(ft.Divider(height=1, color="#F0F0F0"))
+            controls.append(item['row'])
+        # 末尾保留添加步骤输入框
+        if len(controls) > 0:
+            controls.append(ft.Divider(height=1, color="#F0F0F0"))
+        if hasattr(self, '_detail_add_step_row') and self._detail_add_step_row is not None:
+            controls.append(self._detail_add_step_row)
+        self._detail_steps_col.controls = controls
 
     def _hide_detail_panel(self):
         """隐藏右侧详情面板（不重载，由调用方决定）"""
@@ -540,7 +589,7 @@ class DeskApp(ft.Container):
         self._page.update()
 
     def _on_detail_add_step(self, e):
-        """在详情面板中添加步骤（带勾选圈 + 删除按钮）"""
+        """在详情面板中添加步骤（插入到添加输入框之前）"""
         desc = e.control.value.strip()
         if not desc:
             return
@@ -549,7 +598,15 @@ class DeskApp(ft.Container):
         if 'steps' not in self._detail_data:
             self._detail_data['steps'] = []
         self._detail_data['steps'].append(new_step)
+        # 在添加输入框之前插入分割线 + 新步骤行
+        idx = len(self._detail_steps_col.controls) - 1  # 添加输入框位置
+        if len(self._detail_step_fields) > 0:
+            self._detail_steps_col.controls.insert(idx, ft.Divider(height=1, color="#F0F0F0"))
+            idx += 1
         self._build_step_row(new_step)
+        # 把新步骤行移动到添加输入框之前
+        new_row = self._detail_steps_col.controls.pop()
+        self._detail_steps_col.controls.insert(idx, new_row)
         e.control.value = ""
         self._detail_panel.update()
 
@@ -572,9 +629,15 @@ class DeskApp(ft.Container):
         """弹出日期选择器"""
         def on_date_change(e):
             if e.control.value:
-                # DatePicker 返回 date 对象，直接格式化；若为 datetime 则取 date()
                 d = e.control.value
-                if isinstance(d, datetime):
+                # Flet 0.86.x DatePicker 可能返回 UTC datetime，直接
+                # strftime 会按 UTC 格式化导致日期差一天（UTC+8 地区）。
+                # 先转为本地时区再取日期。
+                import datetime as _dt
+                if isinstance(d, _dt.datetime):
+                    local_tz = _dt.datetime.now().astimezone().tzinfo
+                    if d.tzinfo is not None:
+                        d = d.astimezone(local_tz)
                     d = d.date()
                 self._reminder_date_field.value = d.strftime("%Y-%m-%d")
                 self._reminder_date_field.update()
@@ -606,6 +669,15 @@ class DeskApp(ft.Container):
         """保存提醒设置到任务"""
         if self._detail_data is None:
             return
+        current_date = self._detail_data.get('reminder_date', '')
+        current_time = self._detail_data.get('reminder_time', '')
+        if current_date and current_time:
+            # 已有提醒待触发，不允许覆盖
+            self._reminder_status_text.value = "⚠ 已有提醒待触发，请先删除旧提醒再设置新提醒"
+            self._reminder_status_text.color = "#FF9800"
+            self._reminder_status_row.update()
+            return
+
         self._detail_data['reminder_date'] = self._reminder_date_field.value.strip() if hasattr(self, '_reminder_date_field') else ''
         self._detail_data['reminder_time'] = self._reminder_time_field.value.strip() if hasattr(self, '_reminder_time_field') else ''
         self._detail_data['reminder_advance'] = int(self._reminder_advance_radio.value) if hasattr(self, '_reminder_advance_radio') else 0
@@ -613,8 +685,37 @@ class DeskApp(ft.Container):
         self.task_manager.update_task(self._detail_data)
         # 刷新列表，更新铃铛图标
         self._load_tasks(self._current_tag_filter)
-        # 关闭面板（可选，根据需求）
-        # self._hide_detail_panel()
+        # 禁用保存按钮，防止重复设置
+        if hasattr(self, '_reminder_save_btn') and self._reminder_save_btn is not None:
+            self._reminder_save_btn.disabled = True
+            self._reminder_save_btn.update()
+        # 显示成功状态
+        freq_label = {"once": "单次", "daily": "每天", "weekly": "每周", "monthly": "每月"}
+        freq_text = freq_label.get(self._detail_data['reminder_frequency'], "单次")
+        self._reminder_status_text.value = (
+            f"✅ 已添加提醒 日期 {self._detail_data['reminder_date']} "
+            f"时间 {self._detail_data['reminder_time']}，频率 {freq_text}"
+        )
+        self._reminder_status_text.color = "#4CAF50"
+        self._reminder_status_row.update()
+
+    def _delete_reminder(self):
+        """删除提醒：清空所有提醒字段并持久化"""
+        if self._detail_data is None:
+            return
+        self._detail_data['reminder_date'] = ''
+        self._detail_data['reminder_time'] = ''
+        self._detail_data['reminder_advance'] = 0
+        self._detail_data['reminder_frequency'] = 'once'
+        self.task_manager.update_task(self._detail_data)
+        # 刷新列表，移除铃铛图标
+        self._load_tasks(self._current_tag_filter)
+        # 重新打开面板，更新提醒区 UI
+        self._show_detail_panel(self._detail_data)
+        # 显示删除状态
+        self._reminder_status_text.value = "🗑 已删除提醒"
+        self._reminder_status_text.color = TEXT_SECONDARY
+        self._reminder_status_row.update()
 
     def _on_navigate(self, key: str):
         """切换页面 / 筛选"""
