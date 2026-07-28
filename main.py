@@ -25,8 +25,8 @@ def main(page: ft.Page):
     page.bgcolor = "#F5F5F5"
     page.theme = build_theme()
 
-    # ── 启动后台提醒服务 ──
-    start_reminder_service()
+    # ── 启动后台提醒服务（传入 page 用于弹出 AlertDialog）──
+    start_reminder_service(page)
 
     # ── 挂载主应用 ──
     app = DeskApp(page)

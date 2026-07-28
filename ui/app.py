@@ -110,6 +110,9 @@ class DeskApp(ft.Container):
         self._detail_step_fields = []
         self._detail_steps_col = None
 
+        # 启动提醒通知轮询（主线程检查队列，每 1 秒）
+        self._start_notification_checker()
+
         # 构建任务列表容器（内部是一个 Column + ScrollView）
         self._task_scroll = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self._task_list_container = ft.Container(
@@ -361,102 +364,65 @@ class DeskApp(ft.Container):
         # 步骤列表整体用 row_container 包裹（含 70px 标签列占位）
         steps_row = row_container(self._detail_steps_col, expand=True)
 
-        # ── 提醒设置区 ──
-        # 日期选择
-        self._reminder_date_field = ft.TextField(
-            value=self._detail_data.get('reminder_date', ''),
-            hint_text="日期 (YYYY-MM-DD)",
-            width=130,
-            dense=True,
-            border=ft.InputBorder.OUTLINE,
-            border_radius=ft.BorderRadius.all(6),
-            on_click=lambda e: self._pick_reminder_date(),
-        )
-        # 时间选择
-        self._reminder_time_field = ft.TextField(
-            value=self._detail_data.get('reminder_time', ''),
-            hint_text="时间 (HH:MM)",
-            width=100,
-            dense=True,
-            border=ft.InputBorder.OUTLINE,
-            border_radius=ft.BorderRadius.all(6),
-            on_click=lambda e: self._pick_reminder_time(),
-        )
+        # ── 提醒设置区（按钮触发弹窗）──
+        has_reminder = bool(self._detail_data.get('reminder_date', ''))
+        self._reminder_display_date = self._detail_data.get('reminder_date', '')
+        self._reminder_display_time = self._detail_data.get('reminder_time', '')
+        self._reminder_display_advance = self._detail_data.get('reminder_advance', 0)
+        self._reminder_display_freq = self._detail_data.get('reminder_frequency', 'once')
 
-        # 准时/提前5分钟（互斥 Radio）
-        self._reminder_advance_radio = ft.RadioGroup(
-            value=str(self._detail_data.get('reminder_advance', 0)),
-            content=ft.Row([
-                ft.Radio(value="0", label="准时提醒"),
-                ft.Radio(value="5", label="提前5分钟提醒"),
-            ], spacing=12),
-        )
-
-        # 频率（单次/每天/每周/每月）
-        freq_value = self._detail_data.get('reminder_frequency', 'once')
-        self._reminder_freq_radio = ft.RadioGroup(
-            value=freq_value,
-            content=ft.Row([
-                ft.Radio(value="once", label="单次"),
-                ft.Radio(value="daily", label="每天"),
-                ft.Radio(value="weekly", label="每周"),
-                ft.Radio(value="monthly", label="每月"),
-            ], spacing=12, wrap=True),
-        )
-
-        # 提醒区：统一 70px 标签列
-        # 状态文字（保存/删除后显示）
+        # 状态文字
         self._reminder_status_text = ft.Text("", size=12, color="#4CAF50")
         self._reminder_status_row = ft.Row([
             ft.Text("", width=LABEL_W),
             self._reminder_status_text,
         ], spacing=8)
 
-        # 判断是否已有提醒
-        has_existing = bool(self._detail_data.get('reminder_date', ''))
-
-        # 保存按钮
-        self._reminder_save_btn = ft.TextButton(
-            "保存提醒",
-            icon=ft.Icons.SAVE,
-            on_click=lambda e: self._save_reminder(),
-            style=ft.ButtonStyle(color=PRIMARY),
-            disabled=has_existing,
-        )
-
-        reminder_row = row_container(
-            ft.Column([
-                # 第1行：🔔 提醒我 + 日期 + 时间
-                ft.Row([
-                    ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY, width=LABEL_W),
-                    self._reminder_date_field,
-                    self._reminder_time_field,
-                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                # 第2行：准时/提前5分
-                ft.Row([
-                    ft.Text("", width=LABEL_W),
-                    self._reminder_advance_radio,
-                ], spacing=8),
-                # 第3行：频率
-                ft.Row([
-                    ft.Text("", width=LABEL_W),
-                    self._reminder_freq_radio,
-                ], spacing=8),
-                # 第4行：保存提醒 + 删除提醒按钮
-                ft.Row([
-                    ft.Text("", width=LABEL_W),
-                    self._reminder_save_btn,
-                    ft.TextButton(
-                        "删除提醒",
-                        icon=ft.Icons.DELETE,
-                        on_click=lambda e: self._delete_reminder(),
-                        style=ft.ButtonStyle(color="#E4405F"),
-                    ),
-                ], spacing=8),
-                # 第5行：状态显示
-                self._reminder_status_row,
-            ], spacing=6),
-        )
+        if has_reminder:
+            freq_label = {"once": "单次", "daily": "每天", "weekly": "每周", "monthly": "每月"}
+            freq_text = freq_label.get(self._reminder_display_freq, "单次")
+            advance_text = "提前5分钟" if self._reminder_display_advance == 5 else "准时"
+            reminder_info = ft.Text(
+                f"🔔 {self._reminder_display_date} {self._reminder_display_time} · {advance_text} · {freq_text}",
+                size=13, color=TEXT_PRIMARY,
+            )
+            reminder_action_row = ft.Row([
+                ft.Text("", width=LABEL_W),
+                ft.TextButton(
+                    "编辑提醒", icon=ft.Icons.EDIT,
+                    on_click=lambda e: self._show_reminder_dialog(),
+                    style=ft.ButtonStyle(color=PRIMARY),
+                ),
+                ft.TextButton(
+                    "删除提醒", icon=ft.Icons.DELETE,
+                    on_click=lambda e: self._delete_reminder(),
+                    style=ft.ButtonStyle(color="#E4405F"),
+                ),
+            ], spacing=8)
+            reminder_row = row_container(
+                ft.Column([
+                    ft.Row([
+                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY, width=LABEL_W),
+                        reminder_info,
+                    ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    reminder_action_row,
+                    self._reminder_status_row,
+                ], spacing=6),
+            )
+        else:
+            reminder_row = row_container(
+                ft.Column([
+                    ft.Row([
+                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY, width=LABEL_W),
+                        ft.TextButton(
+                            "设置提醒", icon=ft.Icons.ADD_ALERT,
+                            on_click=lambda e: self._show_reminder_dialog(),
+                            style=ft.ButtonStyle(color=PRIMARY),
+                        ),
+                    ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    self._reminder_status_row,
+                ], spacing=6),
+            )
 
         # ── 面板主体：标题/步骤/提醒 统一网格对齐 ──
         panel_content = ft.Column(
@@ -617,87 +583,328 @@ class DeskApp(ft.Container):
         self._detail_data['title'] = self._detail_title_field.value.strip()
         for item in self._detail_step_fields:
             item['step']['description'] = item['tf'].value.strip()
-        # 提醒字段
-        self._detail_data['reminder_date'] = self._reminder_date_field.value.strip() if hasattr(self, '_reminder_date_field') else ''
-        self._detail_data['reminder_time'] = self._reminder_time_field.value.strip() if hasattr(self, '_reminder_time_field') else ''
-        self._detail_data['reminder_advance'] = int(self._reminder_advance_radio.value) if hasattr(self, '_reminder_advance_radio') else 0
-        self._detail_data['reminder_frequency'] = self._reminder_freq_radio.value if hasattr(self, '_reminder_freq_radio') else 'once'
+        # 提醒字段已在弹窗中保存，此处不再处理
         self.task_manager.update_task(self._detail_data)
 
-    # ── 日期/时间选择器 ──
-    def _pick_reminder_date(self):
-        """弹出日期选择器"""
-        def on_date_change(e):
-            if e.control.value:
-                d = e.control.value
-                # Flet 0.86.x DatePicker 可能返回 UTC datetime，直接
-                # strftime 会按 UTC 格式化导致日期差一天（UTC+8 地区）。
-                # 先转为本地时区再取日期。
-                import datetime as _dt
-                if isinstance(d, _dt.datetime):
-                    local_tz = _dt.datetime.now().astimezone().tzinfo
-                    if d.tzinfo is not None:
-                        d = d.astimezone(local_tz)
-                    d = d.date()
-                self._reminder_date_field.value = d.strftime("%Y-%m-%d")
-                self._reminder_date_field.update()
+    def _start_notification_checker(self):
+        """主线程轮询提醒队列，发现到期提醒时弹出 AlertDialog"""
+        import asyncio
+        from reminder_service import get_pending_notifications
 
-        dlg = ft.DatePicker(
-            first_date=datetime.now().date(),
-            last_date=datetime(2030, 12, 31).date(),
-            on_change=on_date_change,
+        async def _check():
+            while True:
+                try:
+                    items = get_pending_notifications()
+                    for item in items:
+                        self._show_notification_dialog(item["title"], item["message"])
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
+
+        self._page.run_task(_check)
+
+    def _show_notification_dialog(self, title: str, message: str):
+        """在主线程中弹出提醒通知（用 overlay，和提醒设置弹窗保持一致）"""
+        page = self._page
+
+        dlg_ref = [None]
+
+        def close_dlg(e=None):
+            if dlg_ref[0] and dlg_ref[0] in page.overlay:
+                page.overlay.remove(dlg_ref[0])
+            dlg_ref[0] = None
+            page.update()
+
+        dlg = ft.Container(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Row([
+                        ft.Text("⏰", size=24),
+                        ft.Text(title, size=16, weight=ft.FontWeight.BOLD),
+                    ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    ft.Divider(height=1, color="#E0E0E0"),
+                    ft.Text(message, size=14, color=TEXT_PRIMARY),
+                    ft.Divider(height=1, color="#E0E0E0"),
+                    ft.Row([
+                        ft.TextButton("知道了", on_click=close_dlg,
+                                      style=ft.ButtonStyle(color=PRIMARY)),
+                    ], alignment=ft.MainAxisAlignment.END),
+                ], spacing=12),
+                bgcolor=ft.Colors.WHITE,
+                border_radius=ft.BorderRadius.all(12),
+                padding=20,
+                width=380,
+                shadow=ft.BoxShadow(blur_radius=20, color="#40000000", offset=ft.Offset(0, 8)),
+                on_click=lambda e: None,
+            ),
+            bgcolor="#80000000",
+            alignment=ft.alignment.Alignment(0, 0),
+            expand=True,
+            on_click=lambda e: close_dlg(),
         )
-        self._page.overlay.append(dlg)
-        dlg.open = True
-        self._page.update()
 
-    def _pick_reminder_time(self):
-        """弹出时间选择器"""
-        def on_time_change(e):
-            if e.control.value:
-                self._reminder_time_field.value = e.control.value.strftime("%H:%M")
-                self._reminder_time_field.update()
+        dlg_ref[0] = dlg
+        page.overlay.append(dlg)
+        page.update()
+        print(f"[NotificationChecker] ✅ 弹窗已弹出: {title}")
 
-        dlg = ft.TimePicker(
-            on_change=on_time_change,
+    # ── 提醒设置弹窗 ──
+
+    def _show_reminder_dialog(self):
+        """一级弹窗：日历选择 + 时间修改 + 提前提醒 + 频率"""
+        print("[ReminderDialog] _show_reminder_dialog called (new overlay version)")
+        self._do_show_reminder_dialog()
+
+    def _do_show_reminder_dialog(self):
+        page = self._page
+        print("[ReminderDialog] _do_show_reminder_dialog")
+        try:
+            rd = self._detail_data.get('reminder_date', '') if self._detail_data else ''
+            rt = self._detail_data.get('reminder_time', '') if self._detail_data else ''
+            advance = self._detail_data.get('reminder_advance', 0) if self._detail_data else 0
+            freq = self._detail_data.get('reminder_frequency', 'once') if self._detail_data else 'once'
+
+            dlg_state = {
+                'date': rd or datetime.now().strftime('%Y-%m-%d'),
+                'time': rt or '09:00',
+                'advance': str(advance),
+                'freq': freq,
+            }
+
+            date_text = ft.Text(dlg_state['date'], size=16, weight=ft.FontWeight.BOLD, color=PRIMARY)
+            time_text = ft.Text(dlg_state['time'], size=24, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
+
+            overlay = [None]  # 用 list 引用
+
+            def close_dlg(e=None):
+                if overlay[0] and overlay[0] in page.overlay:
+                    page.overlay.remove(overlay[0])
+                overlay[0] = None
+                page.update()
+
+            def on_date_picked(e):
+                if e.control.value:
+                    d = e.control.value
+                    import datetime as _dt
+                    if isinstance(d, _dt.datetime):
+                        local_tz = _dt.datetime.now().astimezone().tzinfo
+                        if d.tzinfo is not None:
+                            d = d.astimezone(local_tz)
+                        d = d.date()
+                    dlg_state['date'] = d.strftime('%Y-%m-%d')
+                    date_text.value = dlg_state['date']
+                    date_text.update()
+
+            def pick_date(e):
+                dp = ft.DatePicker(
+                    first_date=datetime.now().date(),
+                    last_date=datetime(2030, 12, 31).date(),
+                    on_change=on_date_picked,
+                )
+                page.overlay.append(dp)
+                dp.open = True
+                page.update()
+
+            def pick_time(e):
+                # 通过 run_task 异步打开子弹窗，确保当前事件先处理完
+                async def _open():
+                    self._show_time_picker_dialog(dlg_state, time_text, close_dlg)
+                page.run_task(_open)
+
+            def on_save(e):
+                self._detail_data['reminder_date'] = dlg_state['date']
+                self._detail_data['reminder_time'] = dlg_state['time']
+                self._detail_data['reminder_advance'] = int(dlg_state['advance'])
+                self._detail_data['reminder_frequency'] = dlg_state['freq']
+                self.task_manager.update_task(self._detail_data)
+                close_dlg()
+                self._load_tasks(self._current_tag_filter)
+                self._show_detail_panel(self._detail_data)
+                freq_label = {"once": "单次", "daily": "每天", "weekly": "每周", "monthly": "每月"}
+                freq_text = freq_label.get(dlg_state['freq'], "单次")
+                self._reminder_status_text.value = (
+                    f"✅ 已添加提醒 日期 {dlg_state['date']} "
+                    f"时间 {dlg_state['time']}，频率 {freq_text}"
+                )
+                self._reminder_status_text.color = "#4CAF50"
+                self._reminder_status_row.update()
+
+            advance_radio = ft.RadioGroup(
+                value=dlg_state['advance'],
+                content=ft.Row([
+                    ft.Radio(value="0", label="准时提醒"),
+                    ft.Radio(value="5", label="提前5分钟"),
+                ], spacing=16),
+            )
+            advance_radio.on_change = lambda e: dlg_state.update({'advance': e.control.value})
+
+            freq_radio = ft.RadioGroup(
+                value=dlg_state['freq'],
+                content=ft.Row([
+                    ft.Radio(value="once", label="单次"),
+                    ft.Radio(value="daily", label="每天"),
+                    ft.Radio(value="weekly", label="每周"),
+                    ft.Radio(value="monthly", label="每月"),
+                ], spacing=12, wrap=True),
+            )
+            freq_radio.on_change = lambda e: dlg_state.update({'freq': e.control.value})
+
+            # 自定义遮罩弹窗（不用 AlertDialog，用 overlay Container）
+            overlay_container = ft.Container(
+                content=ft.Container(
+                    content=ft.Column([
+                        ft.Row([
+                            ft.Text("⏰ 设置提醒", size=18, weight=ft.FontWeight.BOLD),
+                        ]),
+                        ft.Divider(height=1, color="#E0E0E0"),
+                        ft.Text("日期", size=12, color=TEXT_SECONDARY),
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.CALENDAR_MONTH, color=PRIMARY, size=18),
+                                date_text,
+                                ft.Text("点击修改 →", size=11, color=TEXT_SECONDARY),
+                            ], spacing=8),
+                            on_click=pick_date,
+                            padding=ft.Padding.symmetric(vertical=12, horizontal=12),
+                            border_radius=ft.BorderRadius.all(8),
+                            bgcolor="#F5F5F5",
+                        ),
+                        ft.Divider(height=1, color="#E0E0E0"),
+                        ft.Text("时间", size=12, color=TEXT_SECONDARY),
+                        ft.Container(
+                            content=ft.Row([
+                                ft.Icon(ft.Icons.ACCESS_TIME, color=PRIMARY, size=18),
+                                time_text,
+                                ft.Text("点击修改 →", size=11, color=TEXT_SECONDARY),
+                            ], spacing=8),
+                            on_click=pick_time,
+                            padding=ft.Padding.only(left=12, top=12, right=12, bottom=12),
+                            border_radius=ft.BorderRadius.all(8),
+                            bgcolor="#F5F5F5",
+                        ),
+                        ft.Divider(height=1, color="#E0E0E0"),
+                        ft.Text("提前提醒", size=12, color=TEXT_SECONDARY),
+                        advance_radio,
+                        ft.Divider(height=1, color="#E0E0E0"),
+                        ft.Text("重复频率", size=12, color=TEXT_SECONDARY),
+                        freq_radio,
+                        ft.Divider(height=1, color="#E0E0E0"),
+                        ft.Row([
+                            ft.TextButton("取消", on_click=lambda e: close_dlg()),
+                            ft.TextButton("保存", on_click=on_save, style=ft.ButtonStyle(color=PRIMARY)),
+                        ], alignment=ft.MainAxisAlignment.END, spacing=8),
+                    ], spacing=8, scroll=ft.ScrollMode.AUTO),
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=ft.BorderRadius.all(12),
+                    padding=20,
+                    width=420,
+                    shadow=ft.BoxShadow(blur_radius=20, color="#40000000", offset=ft.Offset(0, 8)),
+                    on_click=lambda e: None,  # 阻止事件冒泡到外层遮罩
+                ),
+                bgcolor="#80000000",  # 半透明黑色遮罩
+                alignment=ft.alignment.Alignment(0, 0),
+                expand=True,
+                on_click=lambda e: close_dlg(),  # 点击遮罩关闭
+            )
+
+            overlay[0] = overlay_container
+            page.overlay.append(overlay_container)
+            page.update()
+            print("[ReminderDialog] 自定义遮罩弹窗已显示")
+        except Exception as ex:
+            import traceback
+            traceback.print_exc()
+            print(f"[ReminderDialog] ❌ 异常: {ex}")
+
+    def _show_time_picker_dialog(self, dlg_state: dict, time_text: ft.Text, close_parent):
+        """二级弹窗：选择时间（小时 + 分钟），用自定义 overlay"""
+        page = self._page
+        hour, minute = dlg_state['time'].split(':')
+        hour = int(hour)
+        minute = int(minute)
+
+        hour_display = ft.Text(f"{hour:02d}", size=36, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
+        minute_display = ft.Text(f"{minute:02d}", size=36, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
+
+        overlay = [None]
+
+        def close_sub(e=None):
+            if overlay[0] and overlay[0] in page.overlay:
+                page.overlay.remove(overlay[0])
+            overlay[0] = None
+            page.update()
+
+        def confirm_time(e):
+            nonlocal hour, minute
+            dlg_state['time'] = f"{hour:02d}:{minute:02d}"
+            time_text.value = dlg_state['time']
+            time_text.update()
+            close_sub()
+
+        def inc_hour(e):
+            nonlocal hour
+            hour = (hour + 1) % 24
+            hour_display.value = f"{hour:02d}"
+            hour_display.update()
+
+        def dec_hour(e):
+            nonlocal hour
+            hour = (hour - 1) % 24
+            hour_display.value = f"{hour:02d}"
+            hour_display.update()
+
+        def inc_minute(e):
+            nonlocal minute
+            minute = (minute + 1) % 60
+            minute_display.value = f"{minute:02d}"
+            minute_display.update()
+
+        def dec_minute(e):
+            nonlocal minute
+            minute = (minute - 1) % 60
+            minute_display.value = f"{minute:02d}"
+            minute_display.update()
+
+        overlay_container = ft.Container(
+            content=ft.Container(
+                content=ft.Column([
+                    ft.Text("选择时间", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Divider(height=1, color="#E0E0E0"),
+                    ft.Row([
+                        ft.Column([
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_hour, icon_color=PRIMARY),
+                            hour_display,
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_hour, icon_color=PRIMARY),
+                        ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                        ft.Text(":", size=28, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY),
+                        ft.Column([
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_minute, icon_color=PRIMARY),
+                            minute_display,
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_minute, icon_color=PRIMARY),
+                        ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Divider(height=1, color="#E0E0E0"),
+                    ft.Row([
+                        ft.TextButton("取消", on_click=lambda e: close_sub()),
+                        ft.TextButton("确定", on_click=confirm_time, style=ft.ButtonStyle(color=PRIMARY)),
+                    ], alignment=ft.MainAxisAlignment.END, spacing=8),
+                ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=ft.Colors.WHITE,
+                border_radius=ft.BorderRadius.all(12),
+                padding=20,
+                width=300,
+                shadow=ft.BoxShadow(blur_radius=20, color="#40000000", offset=ft.Offset(0, 8)),
+                on_click=lambda e: None,  # 阻止事件冒泡到外层遮罩
+            ),
+            bgcolor="#80000000",
+            alignment=ft.alignment.Alignment(0, 0),
+            expand=True,
+            on_click=lambda e: close_sub(),  # 点击遮罩关闭
         )
-        self._page.overlay.append(dlg)
-        dlg.open = True
-        self._page.update()
 
-    def _save_reminder(self):
-        """保存提醒设置到任务"""
-        if self._detail_data is None:
-            return
-        current_date = self._detail_data.get('reminder_date', '')
-        current_time = self._detail_data.get('reminder_time', '')
-        if current_date and current_time:
-            # 已有提醒待触发，不允许覆盖
-            self._reminder_status_text.value = "⚠ 已有提醒待触发，请先删除旧提醒再设置新提醒"
-            self._reminder_status_text.color = "#FF9800"
-            self._reminder_status_row.update()
-            return
-
-        self._detail_data['reminder_date'] = self._reminder_date_field.value.strip() if hasattr(self, '_reminder_date_field') else ''
-        self._detail_data['reminder_time'] = self._reminder_time_field.value.strip() if hasattr(self, '_reminder_time_field') else ''
-        self._detail_data['reminder_advance'] = int(self._reminder_advance_radio.value) if hasattr(self, '_reminder_advance_radio') else 0
-        self._detail_data['reminder_frequency'] = self._reminder_freq_radio.value if hasattr(self, '_reminder_freq_radio') else 'once'
-        self.task_manager.update_task(self._detail_data)
-        # 刷新列表，更新铃铛图标
-        self._load_tasks(self._current_tag_filter)
-        # 禁用保存按钮，防止重复设置
-        if hasattr(self, '_reminder_save_btn') and self._reminder_save_btn is not None:
-            self._reminder_save_btn.disabled = True
-            self._reminder_save_btn.update()
-        # 显示成功状态
-        freq_label = {"once": "单次", "daily": "每天", "weekly": "每周", "monthly": "每月"}
-        freq_text = freq_label.get(self._detail_data['reminder_frequency'], "单次")
-        self._reminder_status_text.value = (
-            f"✅ 已添加提醒 日期 {self._detail_data['reminder_date']} "
-            f"时间 {self._detail_data['reminder_time']}，频率 {freq_text}"
-        )
-        self._reminder_status_text.color = "#4CAF50"
-        self._reminder_status_row.update()
+        overlay[0] = overlay_container
+        page.overlay.append(overlay_container)
+        page.update()
 
     def _delete_reminder(self):
         """删除提醒：清空所有提醒字段并持久化"""
@@ -708,11 +915,8 @@ class DeskApp(ft.Container):
         self._detail_data['reminder_advance'] = 0
         self._detail_data['reminder_frequency'] = 'once'
         self.task_manager.update_task(self._detail_data)
-        # 刷新列表，移除铃铛图标
         self._load_tasks(self._current_tag_filter)
-        # 重新打开面板，更新提醒区 UI
         self._show_detail_panel(self._detail_data)
-        # 显示删除状态
         self._reminder_status_text.value = "🗑 已删除提醒"
         self._reminder_status_text.color = TEXT_SECONDARY
         self._reminder_status_row.update()
