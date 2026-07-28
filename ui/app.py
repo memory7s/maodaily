@@ -604,49 +604,47 @@ class DeskApp(ft.Container):
         self._page.run_task(_check)
 
     def _show_notification_dialog(self, title: str, message: str):
-        """在主线程中弹出提醒通知（用 overlay，和提醒设置弹窗保持一致）"""
-        page = self._page
+        """弹出通知：Windows 系统托盘气泡（右下角，窗口最小化也能看到）"""
+        # 后台线程发通知，不阻塞 UI
+        import threading
+        threading.Thread(target=self._send_windows_toast,
+                         args=(title, message), daemon=True).start()
 
-        dlg_ref = [None]
+    def _send_windows_toast(self, title: str, message: str):
+        """后台线程发送 Windows 系统托盘通知（右下角弹出，零依赖）"""
+        try:
+            import subprocess
+            import base64
 
-        def close_dlg(e=None):
-            if dlg_ref[0] and dlg_ref[0] in page.overlay:
-                page.overlay.remove(dlg_ref[0])
-            dlg_ref[0] = None
-            page.update()
+            safe_title = title.replace("'", "''")
+            safe_msg = message.replace("'", "''")
 
-        dlg = ft.Container(
-            content=ft.Container(
-                content=ft.Column([
-                    ft.Row([
-                        ft.Text("⏰", size=24),
-                        ft.Text(title, size=16, weight=ft.FontWeight.BOLD),
-                    ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    ft.Divider(height=1, color="#E0E0E0"),
-                    ft.Text(message, size=14, color=TEXT_PRIMARY),
-                    ft.Divider(height=1, color="#E0E0E0"),
-                    ft.Row([
-                        ft.TextButton("知道了", on_click=close_dlg,
-                                      style=ft.ButtonStyle(color=PRIMARY)),
-                    ], alignment=ft.MainAxisAlignment.END),
-                ], spacing=12),
-                bgcolor=ft.Colors.WHITE,
-                border_radius=ft.BorderRadius.all(12),
-                padding=20,
-                width=380,
-                shadow=ft.BoxShadow(blur_radius=20, color="#40000000", offset=ft.Offset(0, 8)),
-                on_click=lambda e: None,
-            ),
-            bgcolor="#80000000",
-            alignment=ft.alignment.Alignment(0, 0),
-            expand=True,
-            on_click=lambda e: close_dlg(),
-        )
+            # 直接调 PowerShell 弹出系统托盘气泡（NotifyIcon）
+            ps_code = f'''
+Add-Type -AssemblyName System.Windows.Forms
+$notify = New-Object System.Windows.Forms.NotifyIcon
+$notify.Icon = [System.Drawing.SystemIcons]::Information
+$notify.BalloonTipTitle = '{safe_title}'
+$notify.BalloonTipText = '{safe_msg}'
+$notify.Visible = $true
+$notify.ShowBalloonTip(5000)
+Start-Sleep -Seconds 5
+$notify.Visible = $false
+$notify.Dispose()
+'''
 
-        dlg_ref[0] = dlg
-        page.overlay.append(dlg)
-        page.update()
-        print(f"[NotificationChecker] ✅ 弹窗已弹出: {title}")
+            encoded = base64.b64encode(ps_code.encode('utf-16le')).decode('ascii')
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-EncodedCommand", encoded],
+                capture_output=True, timeout=15,
+            )
+            if r.returncode == 0:
+                print(f"[Toast] ✅ 系统托盘通知已发送: {title}")
+            else:
+                err = r.stderr.decode('utf-8', errors='replace')[:200]
+                print(f"[Toast] ⚠ PowerShell 返回 {r.returncode}: {err}")
+        except Exception as ex:
+            print(f"[Toast] ❌ 发送失败: {ex}")
 
     # ── 提醒设置弹窗 ──
 
