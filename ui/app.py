@@ -284,44 +284,152 @@ class DeskApp(ft.Container):
             self._show_detail_panel(task_data)
 
     def _show_detail_panel(self, task_data: dict):
-        """显示右侧详情面板"""
+        """显示右侧详情面板：统一 70px 标签列网格，标题/步骤/提醒/新增/保存等宽对齐"""
         self._detail_task_id = task_data['id']
-        self._detail_data = task_data.copy()  # 复制一份，避免直接修改原数据
+        self._detail_data = task_data.copy()
 
-        # 标题编辑框
+        # 统一行容器：左16右16内边距，内容区起始位置统一
+        def row_container(content, expand=False):
+            return ft.Container(
+                content=content,
+                padding=ft.Padding.only(left=16, right=16),
+                expand=expand,
+            )
+
+        # 标签列固定宽度
+        LABEL_W = 70
+
+        # ── 标题行：空标签 + 标题输入框 ──
         self._detail_title_field = ft.TextField(
             value=self._detail_data.get('title', ''),
             hint_text="任务标题",
+            border=ft.InputBorder.NONE,
+            text_size=16,
+            dense=True,
+            expand=True,
+        )
+        title_row = row_container(
+            ft.Row([
+                ft.Text("", width=LABEL_W),
+                self._detail_title_field,
+            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         )
 
-        # 步骤容器
+        # ── 步骤列表容器 ──
         self._detail_steps_col = ft.Column(
             controls=[],
+            spacing=4,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
         )
 
-        # 步骤列表：每个步骤 = ○/● 勾选圈 + 编辑框 + 删除按钮
-        # 存储结构：{'chk': Text, 'tf': TextField, 'step': step_dict, 'row': Row}
+        # 步骤数据
         self._detail_step_fields = []
         for step in self._detail_data.get('steps', []):
             self._build_step_row(step)
 
-        # 添加步骤输入框
+        # 步骤列表整体用 row_container 包裹（含 70px 标签列占位）
+        steps_row = row_container(self._detail_steps_col, expand=True)
+
+        # ── 提醒设置区 ──
+        # 日期选择
+        self._reminder_date_field = ft.TextField(
+            value=self._detail_data.get('reminder_date', ''),
+            hint_text="日期 (YYYY-MM-DD)",
+            width=130,
+            dense=True,
+            border=ft.InputBorder.OUTLINE,
+            border_radius=ft.BorderRadius.all(6),
+            on_click=lambda e: self._pick_reminder_date(),
+        )
+        # 时间选择
+        self._reminder_time_field = ft.TextField(
+            value=self._detail_data.get('reminder_time', ''),
+            hint_text="时间 (HH:MM)",
+            width=100,
+            dense=True,
+            border=ft.InputBorder.OUTLINE,
+            border_radius=ft.BorderRadius.all(6),
+            on_click=lambda e: self._pick_reminder_time(),
+        )
+
+        # 准时/提前5分钟（互斥 Radio）
+        self._reminder_advance_radio = ft.RadioGroup(
+            value=str(self._detail_data.get('reminder_advance', 0)),
+            content=ft.Row([
+                ft.Radio(value="0", label="准时提醒"),
+                ft.Radio(value="5", label="提前5分钟提醒"),
+            ], spacing=12),
+        )
+
+        # 频率（单次/每天/每周/每月）
+        freq_value = self._detail_data.get('reminder_frequency', 'once')
+        self._reminder_freq_radio = ft.RadioGroup(
+            value=freq_value,
+            content=ft.Row([
+                ft.Radio(value="once", label="单次"),
+                ft.Radio(value="daily", label="每天"),
+                ft.Radio(value="weekly", label="每周"),
+                ft.Radio(value="monthly", label="每月"),
+            ], spacing=12, wrap=True),
+        )
+
+        # 提醒区：统一 70px 标签列
+        reminder_row = row_container(
+            ft.Column([
+                # 第1行：🔔 提醒我 + 日期 + 时间
+                ft.Row([
+                    ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY, width=LABEL_W),
+                    self._reminder_date_field,
+                    self._reminder_time_field,
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                # 第2行：准时/提前5分
+                ft.Row([
+                    ft.Text("", width=LABEL_W),
+                    self._reminder_advance_radio,
+                ], spacing=8),
+                # 第3行：频率
+                ft.Row([
+                    ft.Text("", width=LABEL_W),
+                    self._reminder_freq_radio,
+                ], spacing=8),
+                # 第4行：保存提醒按钮
+                ft.Row([
+                    ft.Text("", width=LABEL_W),
+                    ft.TextButton(
+                        "保存提醒",
+                        icon=ft.Icons.SAVE,
+                        on_click=lambda e: self._save_reminder(),
+                        style=ft.ButtonStyle(color=PRIMARY),
+                    ),
+                ], spacing=8),
+            ], spacing=6),
+        )
+
+        # ── 添加步骤输入行：空标签 + 输入框 ──
         self._detail_add_step_field = ft.TextField(
             hint_text="添加步骤...",
             on_submit=self._on_detail_add_step,
+            border=ft.InputBorder.NONE,
+            dense=True,
+            expand=True,
+        )
+        add_step_row = row_container(
+            ft.Row([
+                ft.Text("", width=LABEL_W),
+                self._detail_add_step_field,
+            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
         )
 
-        # 面板内容（无"标题""步骤"标签，关闭通过点击同一条标题）
+        # ── 面板主体：标题/步骤/提醒/新增步骤 统一网格对齐 ──
         panel_content = ft.Column(
             controls=[
-                ft.Text("任务详情", size=18, weight=ft.FontWeight.BOLD),
-                self._detail_title_field,
-                self._detail_steps_col,
-                self._detail_add_step_field,
+                title_row,
+                steps_row,
+                reminder_row,
+                add_step_row,
             ],
-            spacing=8,
+            spacing=10,
             expand=True,
         )
 
@@ -333,7 +441,8 @@ class DeskApp(ft.Container):
         self._page.update()
 
     def _build_step_row(self, step: dict):
-        """构建单条步骤行：○/● 勾选圈 + 编辑框（已完成=灰+删除线） + ⋯ 菜单"""
+        """构建单条步骤行：70px 标签列 + ○/●勾选圈 + 编辑框 + ⋯菜单"""
+        LABEL_W = 70
         sid = step['id']
         completed = step.get('completed', False)
 
@@ -352,9 +461,11 @@ class DeskApp(ft.Container):
             expand=True,
             text_style=tf_style,
             color="#ADB5BD" if completed else TEXT_PRIMARY,
+            border=ft.InputBorder.NONE,
+            dense=True,
         )
 
-        # ⋯ 菜单按钮（不占右侧空间，避免被滚动条遮挡）
+        # ⋯ 菜单按钮
         menu_btn = ft.PopupMenuButton(
             items=[
                 ft.PopupMenuItem(
@@ -370,11 +481,12 @@ class DeskApp(ft.Container):
 
         row = ft.Row(
             controls=[
+                ft.Text("", width=70),  # 标签列占位，与标题/提醒区对齐
                 ft.Container(content=chk, on_click=lambda e, sid=sid: self._on_detail_toggle_step(sid)),
                 tf,
                 menu_btn,
             ],
-            spacing=4,
+            spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
@@ -448,7 +560,61 @@ class DeskApp(ft.Container):
         self._detail_data['title'] = self._detail_title_field.value.strip()
         for item in self._detail_step_fields:
             item['step']['description'] = item['tf'].value.strip()
+        # 提醒字段
+        self._detail_data['reminder_date'] = self._reminder_date_field.value.strip() if hasattr(self, '_reminder_date_field') else ''
+        self._detail_data['reminder_time'] = self._reminder_time_field.value.strip() if hasattr(self, '_reminder_time_field') else ''
+        self._detail_data['reminder_advance'] = int(self._reminder_advance_radio.value) if hasattr(self, '_reminder_advance_radio') else 0
+        self._detail_data['reminder_frequency'] = self._reminder_freq_radio.value if hasattr(self, '_reminder_freq_radio') else 'once'
         self.task_manager.update_task(self._detail_data)
+
+    # ── 日期/时间选择器 ──
+    def _pick_reminder_date(self):
+        """弹出日期选择器"""
+        def on_date_change(e):
+            if e.control.value:
+                # DatePicker 返回 date 对象，直接格式化；若为 datetime 则取 date()
+                d = e.control.value
+                if isinstance(d, datetime):
+                    d = d.date()
+                self._reminder_date_field.value = d.strftime("%Y-%m-%d")
+                self._reminder_date_field.update()
+
+        dlg = ft.DatePicker(
+            first_date=datetime.now().date(),
+            last_date=datetime(2030, 12, 31).date(),
+            on_change=on_date_change,
+        )
+        self._page.overlay.append(dlg)
+        dlg.open = True
+        self._page.update()
+
+    def _pick_reminder_time(self):
+        """弹出时间选择器"""
+        def on_time_change(e):
+            if e.control.value:
+                self._reminder_time_field.value = e.control.value.strftime("%H:%M")
+                self._reminder_time_field.update()
+
+        dlg = ft.TimePicker(
+            on_change=on_time_change,
+        )
+        self._page.overlay.append(dlg)
+        dlg.open = True
+        self._page.update()
+
+    def _save_reminder(self):
+        """保存提醒设置到任务"""
+        if self._detail_data is None:
+            return
+        self._detail_data['reminder_date'] = self._reminder_date_field.value.strip() if hasattr(self, '_reminder_date_field') else ''
+        self._detail_data['reminder_time'] = self._reminder_time_field.value.strip() if hasattr(self, '_reminder_time_field') else ''
+        self._detail_data['reminder_advance'] = int(self._reminder_advance_radio.value) if hasattr(self, '_reminder_advance_radio') else 0
+        self._detail_data['reminder_frequency'] = self._reminder_freq_radio.value if hasattr(self, '_reminder_freq_radio') else 'once'
+        self.task_manager.update_task(self._detail_data)
+        # 刷新列表，更新铃铛图标
+        self._load_tasks(self._current_tag_filter)
+        # 关闭面板（可选，根据需求）
+        # self._hide_detail_panel()
 
     def _on_navigate(self, key: str):
         """切换页面 / 筛选"""

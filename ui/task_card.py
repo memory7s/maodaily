@@ -192,9 +192,14 @@ class TaskCard(ft.Container):
         )
 
         # ---- 任务头栏 ----
+        # 提醒图标（有提醒时显示小闹钟）
+        has_reminder = bool(task_data.get('reminder_date'))
+        self.reminder_icon = ft.Text("🔔", size=14, visible=has_reminder)
+
         header = ft.Row(
             controls=[
                 ft.Container(content=self.chk, on_click=self._toggle_complete),
+                ft.Container(content=self.reminder_icon, width=20),
                 self.title_container,          # 可点击的标题 → 详情面板
                 ft.Container(
                     content=self.priority_dot,
@@ -330,6 +335,9 @@ class TaskCard(ft.Container):
         self.chk.value = ICON_CHECKED if completed else ICON_UNCHECKED
         self.chk.color = TEXT_DISABLED if completed else PRIMARY
         self.title.color = TEXT_DISABLED if completed else TEXT_PRIMARY
+        # Update reminder icon
+        has_reminder = bool(task_data.get('reminder_date'))
+        self.reminder_icon.visible = has_reminder
         self.update()
 
     def set_expanded(self, expanded: bool):

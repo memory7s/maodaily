@@ -46,6 +46,10 @@ class Task:
         completed_at: str = None,
         tag: str = "",
         priority: str = "",
+        reminder_date: str = "",
+        reminder_time: str = "",
+        reminder_advance: int = 0,
+        reminder_frequency: str = "once",
     ):
         self.id = task_id or datetime.now().strftime("%Y%m%d%H%M%S%f")
         self.title = title
@@ -55,6 +59,10 @@ class Task:
         self.completed_at = completed_at
         self.tag = tag
         self.priority = priority
+        self.reminder_date = reminder_date      # "YYYY-MM-DD"
+        self.reminder_time = reminder_time      # "HH:MM"
+        self.reminder_advance = reminder_advance # 0=准时, 5=提前5分
+        self.reminder_frequency = reminder_frequency # "once"/"daily"/"weekly"/"monthly"
 
     def to_dict(self) -> dict:
         return {
@@ -66,6 +74,10 @@ class Task:
             "completed_at": self.completed_at,
             "tag": self.tag,
             "priority": self.priority,
+            "reminder_date": self.reminder_date,
+            "reminder_time": self.reminder_time,
+            "reminder_advance": self.reminder_advance,
+            "reminder_frequency": self.reminder_frequency,
         }
 
     @classmethod
@@ -80,6 +92,10 @@ class Task:
             completed_at=data.get("completed_at"),
             tag=data.get("tag", ""),
             priority=data.get("priority", ""),
+            reminder_date=data.get("reminder_date", ""),
+            reminder_time=data.get("reminder_time", ""),
+            reminder_advance=data.get("reminder_advance", 0),
+            reminder_frequency=data.get("reminder_frequency", "once"),
         )
 
 
@@ -197,11 +213,17 @@ class TaskManager:
         return False
 
     def update_task(self, task_data: dict):
-        """根据完整 dict 更新任务（标题 + 步骤），用于弹窗统一保存"""
+        """根据完整 dict 更新任务（标题 + 步骤 + 提醒 + 标签 + 优先级）"""
         for task in self.tasks:
             if task.id == task_data['id']:
                 task.title = task_data.get('title', task.title)
                 task.steps = [TaskStep.from_dict(s) for s in task_data.get('steps', [])]
+                task.reminder_date = task_data.get('reminder_date', task.reminder_date)
+                task.reminder_time = task_data.get('reminder_time', task.reminder_time)
+                task.reminder_advance = task_data.get('reminder_advance', task.reminder_advance)
+                task.reminder_frequency = task_data.get('reminder_frequency', task.reminder_frequency)
+                task.tag = task_data.get('tag', task.tag)
+                task.priority = task_data.get('priority', task.priority)
                 self.save()
                 return
 
