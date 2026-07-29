@@ -274,6 +274,11 @@ class DeskApp(ft.Container):
         # 更新日历视图
         self._calendar_view.update_theme(theme)
 
+        # 更新日历任务列表中的卡片
+        for ctrl in self._calendar_task_list.controls:
+            if hasattr(ctrl, 'update_theme'):
+                ctrl.update_theme(theme)
+
         # 更新侧边栏
         self.sidebar.update_theme(theme)
 
@@ -859,8 +864,8 @@ $notify.Dispose()
                 'freq': freq,
             }
 
-            date_text = ft.Text(dlg_state['date'], size=16, weight=ft.FontWeight.BOLD, color=PRIMARY)
-            time_text = ft.Text(dlg_state['time'], size=24, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
+            date_text = ft.Text(dlg_state['date'], size=16, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
+            time_text = ft.Text(dlg_state['time'], size=24, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
 
             overlay = [None]  # 用 list 引用
 
@@ -917,11 +922,13 @@ $notify.Dispose()
                 self._reminder_status_text.color = self._get_theme_color("SUCCESS", "#4CAF50")
                 self._reminder_status_row.update()
 
+            radio_label_style = ft.TextStyle(color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
+
             advance_radio = ft.RadioGroup(
                 value=dlg_state['advance'],
                 content=ft.Row([
-                    ft.Radio(value="0", label="准时提醒"),
-                    ft.Radio(value="5", label="提前5分钟"),
+                    ft.Radio(value="0", label="准时提醒", label_style=radio_label_style),
+                    ft.Radio(value="5", label="提前5分钟", label_style=radio_label_style),
                 ], spacing=16),
             )
             advance_radio.on_change = lambda e: dlg_state.update({'advance': e.control.value})
@@ -929,10 +936,10 @@ $notify.Dispose()
             freq_radio = ft.RadioGroup(
                 value=dlg_state['freq'],
                 content=ft.Row([
-                    ft.Radio(value="once", label="单次"),
-                    ft.Radio(value="daily", label="每天"),
-                    ft.Radio(value="weekly", label="每周"),
-                    ft.Radio(value="monthly", label="每月"),
+                    ft.Radio(value="once", label="单次", label_style=radio_label_style),
+                    ft.Radio(value="daily", label="每天", label_style=radio_label_style),
+                    ft.Radio(value="weekly", label="每周", label_style=radio_label_style),
+                    ft.Radio(value="monthly", label="每月", label_style=radio_label_style),
                 ], spacing=12, wrap=True),
             )
             freq_radio.on_change = lambda e: dlg_state.update({'freq': e.control.value})
@@ -942,7 +949,7 @@ $notify.Dispose()
                 content=ft.Container(
                     content=ft.Column([
                         ft.Row([
-                            ft.Text("⏰ 设置提醒", size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text("⏰ 设置提醒", size=18, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)),
                         ]),
                         ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                         ft.Text("日期", size=12, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
@@ -978,8 +985,8 @@ $notify.Dispose()
                         freq_radio,
                         ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                         ft.Row([
-                            ft.TextButton("取消", on_click=lambda e: close_dlg()),
-                            ft.TextButton("保存", on_click=on_save, style=ft.ButtonStyle(color=PRIMARY)),
+                            ft.TextButton("取消", on_click=lambda e: close_dlg(), style=ft.ButtonStyle(color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY))),
+                            ft.TextButton("保存", on_click=on_save, style=ft.ButtonStyle(color=self._get_theme_color("PRIMARY", PRIMARY))),
                         ], alignment=ft.MainAxisAlignment.END, spacing=8),
                     ], spacing=8, scroll=ft.ScrollMode.AUTO),
                     bgcolor=self._get_theme_color("DIALOG_BG", ft.Colors.WHITE),
@@ -1011,8 +1018,8 @@ $notify.Dispose()
         hour = int(hour)
         minute = int(minute)
 
-        hour_display = ft.Text(f"{hour:02d}", size=36, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
-        minute_display = ft.Text(f"{minute:02d}", size=36, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
+        hour_display = ft.Text(f"{hour:02d}", size=36, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
+        minute_display = ft.Text(f"{minute:02d}", size=36, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
 
         overlay = [None]
 
@@ -1056,25 +1063,25 @@ $notify.Dispose()
         overlay_container = ft.Container(
             content=ft.Container(
                 content=ft.Column([
-                    ft.Text("选择时间", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text("选择时间", size=18, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)),
                     ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                     ft.Row([
                         ft.Column([
-                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_hour, icon_color=PRIMARY),
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_hour, icon_color=self._get_theme_color("PRIMARY", PRIMARY)),
                             hour_display,
-                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_hour, icon_color=PRIMARY),
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_hour, icon_color=self._get_theme_color("PRIMARY", PRIMARY)),
                         ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                         ft.Text(":", size=28, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         ft.Column([
-                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_minute, icon_color=PRIMARY),
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_minute, icon_color=self._get_theme_color("PRIMARY", PRIMARY)),
                             minute_display,
-                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_minute, icon_color=PRIMARY),
+                            ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_minute, icon_color=self._get_theme_color("PRIMARY", PRIMARY)),
                         ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
                     ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                     ft.Row([
-                        ft.TextButton("取消", on_click=lambda e: close_sub()),
-                        ft.TextButton("确定", on_click=confirm_time, style=ft.ButtonStyle(color=PRIMARY)),
+                        ft.TextButton("取消", on_click=lambda e: close_sub(), style=ft.ButtonStyle(color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY))),
+                        ft.TextButton("确定", on_click=confirm_time, style=ft.ButtonStyle(color=self._get_theme_color("PRIMARY", PRIMARY))),
                     ], alignment=ft.MainAxisAlignment.END, spacing=8),
                 ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 bgcolor=self._get_theme_color("DIALOG_BG", ft.Colors.WHITE),
@@ -1168,6 +1175,8 @@ $notify.Dispose()
             for task in tasks:
                 card = self._build_card(task.to_dict())
                 self._calendar_task_list.controls.append(card)
+                if self.theme_manager.is_dark:
+                    card.update_theme(self.theme_manager.current)
         else:
             self._calendar_task_list.controls.append(
                 ft.Container(

@@ -92,7 +92,10 @@ class StepRow(ft.Row):
         self.chk.color = text_disabled if completed else text_secondary
         self.desc.color = text_disabled if completed else text_secondary
         self.del_btn.color = theme.get("DELETE_NORMAL", "#CCCCCC")
-        self.update()
+        try:
+            self.update()
+        except RuntimeError:
+            pass
 
 
 class TaskCard(ft.Container):
@@ -440,7 +443,10 @@ class TaskCard(ft.Container):
             if isinstance(step_row, StepRow):
                 step_row.update_theme(theme)
 
-        self.update()
+        try:
+            self.update()
+        except RuntimeError:
+            pass  # 卡片还未添加到页面（例如日历新创建的卡片），由外部批量更新处理
 
     # ── 内部逻辑 ──
     def _rebuild_steps(self, steps):
