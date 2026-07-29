@@ -34,7 +34,7 @@ def build_header(on_calendar_toggle=None, theme_toggle_btn=None) -> ft.Container
             controls=[
                 ft.Column(
                     controls=[
-                        ft.Text("计划与进展", size=22, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
+                        ft.Text("1³⁶⁵ = 1，每天进步1%", size=22, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY),
                         ft.Text(date_str, size=12, color=TEXT_SECONDARY),
                     ],
                     spacing=2,
