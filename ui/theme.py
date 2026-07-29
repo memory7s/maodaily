@@ -115,6 +115,8 @@ class ThemeManager:
             "ADD_STEP_TEXT": "#4DABF7",
             "SHADOW": "#1A000000",
             "CARD_BORDER": "transparent",
+            "STEP_BOX_BG": "#F8F9FA",
+            "STEP_BOX_BORDER": "#E0E0E0",
         }
 
     # ── 暗色主题 ──
@@ -160,6 +162,8 @@ class ThemeManager:
             "ADD_STEP_TEXT": "#64B5F6",
             "SHADOW": "#40000000",
             "CARD_BORDER": "#333333",
+            "STEP_BOX_BG": "#252525",
+            "STEP_BOX_BORDER": "#333333",
         }
 
 

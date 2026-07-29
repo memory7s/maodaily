@@ -177,7 +177,7 @@ class DeskApp(ft.Container):
             content=ft.Text(""),
             bgcolor=CARD_BG,
             border_radius=ft.BorderRadius.all(10),
-            padding=ft.Padding.only(left=16, top=16, right=24, bottom=16),
+            padding=ft.Padding.only(left=12, top=16, right=20, bottom=16),
             visible=False,
             expand=True,
         )
@@ -211,7 +211,7 @@ class DeskApp(ft.Container):
         self._detail_area = ft.Container(
             content=self._detail_panel,
             expand=True,
-            padding=ft.Padding.only(left=12, right=24, top=20, bottom=20),
+            padding=ft.Padding.only(left=8, right=20, top=20, bottom=20),
             visible=False,
         )
 
@@ -466,22 +466,22 @@ class DeskApp(ft.Container):
             self._show_detail_panel(task_data)
 
     def _show_detail_panel(self, task_data: dict):
-        """显示右侧详情面板：统一 70px 标签列网格，标题/步骤/提醒/新增/保存等宽对齐"""
+        """显示右侧详情面板"""
         self._detail_task_id = task_data['id']
         self._detail_data = task_data.copy()
 
-        # 统一行容器：左16右16内边距，内容区起始位置统一
+        # 统一行容器
         def row_container(content, expand=False):
             return ft.Container(
                 content=content,
-                padding=ft.Padding.only(left=16, right=16),
+                padding=ft.Padding.only(left=8, right=8),
                 expand=expand,
             )
 
-        # 标签列固定宽度
-        LABEL_W = 70
+        # 标签列占位宽度（0=收起，保留以备后续调整）
+        LABEL_W = 0
 
-        # ── 标题行：70px标签列 + 完成圈 + 标题输入框 + 菜单占位 ──
+        # ── 标题行 ──
         completed = self._detail_data.get('completed', False)
         self._detail_title_chk = ft.Text(
             "●" if completed else "○", size=16, width=22,
@@ -548,7 +548,21 @@ class DeskApp(ft.Container):
         self._detail_steps_col.controls.append(self._detail_add_step_row)
 
         # 步骤列表整体用 row_container 包裹（标题行已在列内首个元素）
-        steps_section = row_container(self._detail_steps_col, expand=True)
+        border_color = self._get_theme_color("STEP_BOX_BORDER", "#E0E0E0")
+        steps_box = ft.Container(
+            content=self._detail_steps_col,
+            bgcolor=self._get_theme_color("STEP_BOX_BG", "#F8F9FA"),
+            border=ft.Border(
+                left=ft.BorderSide(1, border_color),
+                right=ft.BorderSide(1, border_color),
+                top=ft.BorderSide(1, border_color),
+                bottom=ft.BorderSide(1, border_color),
+            ),
+            border_radius=ft.BorderRadius.all(8),
+            padding=ft.Padding.only(left=8, right=8, top=4, bottom=4),
+            expand=True,
+        )
+        steps_section = row_container(steps_box, expand=True)
 
         # ── 提醒设置区（按钮触发弹窗）──
         has_reminder = bool(self._detail_data.get('reminder_date', ''))
@@ -588,7 +602,7 @@ class DeskApp(ft.Container):
             reminder_row = row_container(
                 ft.Column([
                     ft.Row([
-                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY), width=LABEL_W),
+                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         reminder_info,
                     ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     reminder_action_row,
@@ -599,7 +613,7 @@ class DeskApp(ft.Container):
             reminder_row = row_container(
                 ft.Column([
                     ft.Row([
-                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY), width=LABEL_W),
+                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         ft.TextButton(
                             "设置提醒", icon=ft.Icons.ADD_ALERT,
                             on_click=lambda e: self._show_reminder_dialog(),
@@ -629,8 +643,8 @@ class DeskApp(ft.Container):
         self._page.update()
 
     def _build_step_row(self, step: dict):
-        """构建单条步骤行：70px 标签列 + ○/●勾选圈 + 编辑框 + ⋯菜单"""
-        LABEL_W = 70
+        """构建单条步骤行：○/●勾选圈 + 编辑框 + ⋯菜单"""
+        LABEL_W = 0
         sid = step['id']
         completed = step.get('completed', False)
 
@@ -669,7 +683,7 @@ class DeskApp(ft.Container):
 
         row = ft.Row(
             controls=[
-                ft.Text("", width=70),  # 标签列占位，与标题/提醒区对齐
+                ft.Text("", width=LABEL_W),
                 ft.Container(content=chk, on_click=lambda e, sid=sid: self._on_detail_toggle_step(sid)),
                 tf,
                 menu_btn,
