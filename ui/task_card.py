@@ -77,7 +77,21 @@ class StepRow(ft.Row):
             self._on_delete(self._data)
 
     def _handle_del_hover(self, e):
-        self.del_btn.color = DANGER if e.data == "true" else "#CCCCCC"
+        theme = self._theme if hasattr(self, '_theme') and self._theme else {}
+        danger = theme.get("DANGER", DANGER)
+        normal = theme.get("DELETE_NORMAL", "#CCCCCC")
+        self.del_btn.color = danger if e.data == "true" else normal
+        self.update()
+
+    def update_theme(self, theme: dict):
+        """更新步骤行主题颜色"""
+        self._theme = theme
+        completed = self._data.get("completed", False)
+        text_disabled = theme.get("TEXT_DISABLED", TEXT_DISABLED)
+        text_secondary = theme.get("TEXT_SECONDARY", TEXT_SECONDARY)
+        self.chk.color = text_disabled if completed else text_secondary
+        self.desc.color = text_disabled if completed else text_secondary
+        self.del_btn.color = theme.get("DELETE_NORMAL", "#CCCCCC")
         self.update()
 
 
@@ -181,8 +195,12 @@ class TaskCard(ft.Container):
                     on_click=lambda e: self._do_card_tag("生活"),
                 ),
                 ft.PopupMenuItem(
-                    content=ft.Text("分类：无分类"),
+                    content=ft.Text("分类：暂时不做"),
                     on_click=lambda e: self._do_card_tag(""),
+                ),
+                ft.PopupMenuItem(
+                    content=ft.Text("分类：就是不做"),
+                    on_click=lambda e: self._do_card_tag("就是不做"),
                 ),
                 ft.PopupMenuItem(
                     content=ft.Text("删除任务"),
@@ -344,6 +362,84 @@ class TaskCard(ft.Container):
         self._expanded = expanded
         self._steps_col.visible = expanded
         self._add_step_input.visible = expanded
+        self.update()
+
+    def update_theme(self, theme: dict):
+        """更新卡片主题颜色"""
+        self._theme = theme
+        completed = self._data.get("completed", False)
+        priority = self._data.get("priority", "")
+        tag = self._data.get("tag", "")
+
+        # 卡片背景
+        self.bgcolor = theme.get("CARD_BG", CARD_BG)
+        self.shadow = ft.BoxShadow(
+            blur_radius=6,
+            color=theme.get("SHADOW", "#1A000000"),
+            offset=ft.Offset(0, 2),
+        )
+
+        # 勾选圈
+        self.chk.color = theme.get("TEXT_DISABLED", TEXT_DISABLED) if completed else theme.get("PRIMARY", PRIMARY)
+
+        # 标题
+        self.title.color = theme.get("TEXT_DISABLED", TEXT_DISABLED) if completed else theme.get("TEXT_PRIMARY", TEXT_PRIMARY)
+
+        # 优先级标记
+        is_starred = priority in ("高", "high")
+        self.priority_dot.color = theme.get("STAR_ACTIVE", "#FF8700") if is_starred else theme.get("STAR_INACTIVE", "#CCCCCC")
+
+        # 标签
+        if tag:
+            tag_color = theme.get("TAG_COLORS", TAG_COLORS).get(tag, "#868E96")
+            card_content = self.content
+            if card_content and len(card_content.controls) > 3:
+                bottom_row = card_content.controls[3]
+                if bottom_row and hasattr(bottom_row, 'controls'):
+                    for item in bottom_row.controls:
+                        if isinstance(item, ft.Container) and hasattr(item, 'bgcolor') and item.bgcolor:
+                            item.bgcolor = tag_color
+                            if item.content and isinstance(item.content, ft.Text):
+                                item.content.color = theme.get("WHITE_TEXT", "#FFFFFF")
+                            break
+
+        # 进度条
+        card_content = self.content
+        if card_content and len(card_content.controls) > 3:
+            bottom_row = card_content.controls[3]
+            if bottom_row and hasattr(bottom_row, 'controls'):
+                for item in bottom_row.controls:
+                    if isinstance(item, ft.Row):
+                        for sub in item.controls:
+                            if isinstance(sub, ft.Container) and hasattr(sub, 'bgcolor') and sub.bgcolor == "#E0E0E0":
+                                sub.bgcolor = theme.get("TEXT_DISABLED", "#E0E0E0")
+                                sub.content.bgcolor = theme.get("PRIMARY", PRIMARY)
+                            elif isinstance(sub, ft.Text) and sub.size == 10:
+                                sub.color = theme.get("TEXT_SECONDARY", TEXT_SECONDARY)
+
+        # 底部日期文本
+        if card_content and len(card_content.controls) > 3:
+            bottom_row = card_content.controls[3]
+            if bottom_row and hasattr(bottom_row, 'controls'):
+                for item in bottom_row.controls:
+                    if isinstance(item, ft.Text) and item.size == 10:
+                        item.color = theme.get("TEXT_SECONDARY", TEXT_SECONDARY)
+
+        # 添加步骤输入框
+        add_input = self._add_step_input
+        if add_input and add_input.controls:
+            tf = add_input.controls[0]
+            if isinstance(tf, ft.TextField):
+                tf.hint_style = ft.TextStyle(size=12, color=theme.get("TEXT_SECONDARY", TEXT_SECONDARY))
+            plus = add_input.controls[-1]
+            if isinstance(plus, ft.Text):
+                plus.color = theme.get("PRIMARY", PRIMARY)
+
+        # 步骤行
+        for step_row in self._steps_col.controls:
+            if isinstance(step_row, StepRow):
+                step_row.update_theme(theme)
+
         self.update()
 
     # ── 内部逻辑 ──

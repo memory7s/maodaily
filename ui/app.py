@@ -4,7 +4,7 @@ Phase 2: 使用 TaskCard 组件展示任务列表（假数据）
 """
 
 import flet as ft
-from .theme import PRIMARY, BG, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG
+from .theme import PRIMARY, BG, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, ThemeManager
 from .sidebar import Sidebar
 from .task_card import TaskCard
 from .calendar_view import CalendarView
@@ -12,11 +12,22 @@ from datetime import datetime
 from task_manager import TaskManager
 
 
-def build_header(on_calendar_toggle=None) -> ft.Container:
+def build_header(on_calendar_toggle=None, theme_toggle_btn=None) -> ft.Container:
     """顶部标题栏"""
     now = datetime.now()
     weekday_cn = ["一", "二", "三", "四", "五", "六", "日"]
     date_str = f"{now.year}年{now.month}月{now.day}日 周{weekday_cn[now.weekday()]}"
+
+    header_controls = [
+        ft.IconButton(
+            icon=ft.Icons.CALENDAR_MONTH,
+            icon_color=TEXT_SECONDARY,
+            tooltip="日历",
+            on_click=on_calendar_toggle,
+        ),
+    ]
+    if theme_toggle_btn:
+        header_controls.append(theme_toggle_btn)
 
     return ft.Container(
         content=ft.Row(
@@ -29,14 +40,7 @@ def build_header(on_calendar_toggle=None) -> ft.Container:
                     spacing=2,
                 ),
                 ft.Row(
-                    controls=[
-                        ft.IconButton(
-                            icon=ft.Icons.CALENDAR_MONTH,
-                            icon_color=TEXT_SECONDARY,
-                            tooltip="日历",
-                            on_click=on_calendar_toggle,
-                        ),
-                    ],
+                    controls=header_controls,
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -101,6 +105,15 @@ class DeskApp(ft.Container):
         self._task_card_controls = []  # 所有 TaskCard 控件引用
         self.task_manager = TaskManager()
 
+        # 主题管理
+        self.theme_manager = ThemeManager()
+        self._theme_toggle_btn = ft.IconButton(
+            icon=ft.Icons.DARK_MODE,
+            icon_color=TEXT_SECONDARY,
+            tooltip="切换暗色主题",
+            on_click=self._toggle_theme,
+        )
+
         # 当前 tag 筛选（None=全部，字符串=特定 tag）
         self._current_tag_filter = None
 
@@ -140,10 +153,10 @@ class DeskApp(ft.Container):
         self._calendar_section = ft.Column(
             controls=[
                 self._calendar_view,
-                ft.Divider(height=1, color="#E0E0E0"),
+                ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                 ft.Container(
                     content=ft.Row([
-                        ft.Text("📋 选中日期的任务", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY),
+                        ft.Text("📋 选中日期的任务", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         self._calendar_back_btn,
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     padding=ft.Padding.symmetric(vertical=8),
@@ -169,6 +182,10 @@ class DeskApp(ft.Container):
         )
         self._detail_divider = ft.VerticalDivider(width=1, color="#E0E0E0", visible=False)
 
+        # 存储 divider 引用以便主题切换时更新
+        self._header_divider = ft.Divider(height=1, color="#E0E0E0")
+        self._sidebar_divider = ft.VerticalDivider(width=1, color="#E0E0E0")
+
         # 加载真实任务数据
         self._load_tasks(self._current_tag_filter)
 
@@ -177,8 +194,8 @@ class DeskApp(ft.Container):
         self._task_area = ft.Container(
             content=ft.Column(
                 controls=[
-                    build_header(on_calendar_toggle=lambda: self._toggle_calendar()),
-                    ft.Divider(height=1, color="#E0E0E0"),
+                    build_header(on_calendar_toggle=lambda: self._toggle_calendar(), theme_toggle_btn=self._theme_toggle_btn),
+                    self._header_divider,
                     self._task_list_container,
                     self._calendar_section,
                     build_add_bar(self._on_add_task),
@@ -209,12 +226,114 @@ class DeskApp(ft.Container):
         self.content = ft.Row(
             controls=[
                 self.sidebar,
-                ft.VerticalDivider(width=1, color="#E0E0E0"),
+                self._sidebar_divider,
                 self.main_area,
             ],
             expand=True,
             spacing=0,
         )
+
+    # ── 主题切换 ──
+
+    def _get_theme_color(self, key: str, default: str) -> str:
+        """获取当前主题颜色"""
+        return self.theme_manager.current.get(key, default)
+
+    def _toggle_theme(self, e=None):
+        """切换亮色/暗色主题"""
+        new_theme = self.theme_manager.toggle()
+        is_dark = self.theme_manager.is_dark
+        self._theme_toggle_btn.icon = ft.Icons.LIGHT_MODE if is_dark else ft.Icons.DARK_MODE
+        self._theme_toggle_btn.tooltip = "切换亮色主题" if is_dark else "切换暗色主题"
+        self._update_ui_colors(new_theme)
+
+    def _update_ui_colors(self, theme: dict):
+        """更新所有 UI 元素的颜色"""
+        # 更新自身背景
+        self.bgcolor = theme["BG"]
+
+        # 更新任务区域背景
+        self._task_area.bgcolor = theme["BG"]
+
+        # 更新卡片背景
+        self._detail_panel.bgcolor = theme["CARD_BG"]
+
+        # 更新分割线
+        divider_color = theme["DIVIDER"]
+        self._header_divider.color = divider_color
+        self._sidebar_divider.color = divider_color
+        self._detail_divider.color = divider_color
+
+        # 更新主题切换按钮图标颜色
+        self._theme_toggle_btn.icon_color = theme["TEXT_SECONDARY"]
+
+        # 更新任务卡片
+        for card in self._task_card_controls:
+            card.update_theme(theme)
+
+        # 更新日历视图
+        self._calendar_view.update_theme(theme)
+
+        # 更新侧边栏
+        self.sidebar.update_theme(theme)
+
+        # 更新顶部标题栏文本颜色
+        self._update_header_colors(theme)
+
+        # 更新添加任务栏
+        self._update_add_bar_colors(theme)
+
+        # 更新日历分区
+        self._update_calendar_section_colors(theme)
+
+        self._page.update()
+
+    def _update_header_colors(self, theme: dict):
+        """更新顶部标题栏文本颜色"""
+        task_area_col = self._task_area.content
+        if task_area_col and task_area_col.controls:
+            header = task_area_col.controls[0]  # build_header 返回的 Container
+            if header and header.content:
+                header_row = header.content
+                if header_row.controls:
+                    left_col = header_row.controls[0]
+                    if isinstance(left_col, ft.Column) and left_col.controls:
+                        left_col.controls[0].color = theme["TEXT_PRIMARY"]  # title
+                        left_col.controls[1].color = theme["TEXT_SECONDARY"]  # date
+                    right_row = header_row.controls[1]
+                    if isinstance(right_row, ft.Row) and right_row.controls:
+                        for btn in right_row.controls:
+                            if isinstance(btn, ft.IconButton):
+                                btn.icon_color = theme["TEXT_SECONDARY"]
+
+    def _update_add_bar_colors(self, theme: dict):
+        """更新底部添加任务栏颜色"""
+        task_area_col = self._task_area.content
+        if task_area_col and task_area_col.controls:
+            add_bar = task_area_col.controls[-1]  # build_add_bar 返回的 Container
+            if add_bar and add_bar.content:
+                add_row = add_bar.content
+                if add_row.controls:
+                    tf = add_row.controls[0]
+                    if isinstance(tf, ft.TextField):
+                        tf.fill_color = theme["INPUT_BG"]
+                        tf.border_color = theme["INPUT_BORDER"]
+                        tf.hint_style = ft.TextStyle(color=theme["TEXT_SECONDARY"], size=14)
+
+    def _update_calendar_section_colors(self, theme: dict):
+        """更新日历分区颜色"""
+        # 更新日历任务列表标题
+        if self._calendar_section.controls:
+            for ctrl in self._calendar_section.controls:
+                if isinstance(ctrl, ft.Divider):
+                    ctrl.color = theme["DIVIDER"]
+                elif isinstance(ctrl, ft.Container) and ctrl.content:
+                    if isinstance(ctrl.content, ft.Row):
+                        for child in ctrl.content.controls:
+                            if isinstance(child, ft.Text) and child.size == 13:
+                                child.color = theme["TEXT_SECONDARY"]
+                            elif isinstance(child, ft.TextButton):
+                                child.style = ft.ButtonStyle(color=theme["TEXT_SECONDARY"])
 
     # ── 假数据加载 ──
 
@@ -242,9 +361,9 @@ class DeskApp(ft.Container):
                 ft.Container(
                     content=ft.Row(
                         controls=[
-                            ft.Container(height=1, bgcolor="#E0E0E0", expand=True),
-                            ft.Text(" 已完成 ", size=11, color=TEXT_SECONDARY),
-                            ft.Container(height=1, bgcolor="#E0E0E0", expand=True),
+                            ft.Container(height=1, bgcolor=self._get_theme_color("DIVIDER", "#E0E0E0"), expand=True),
+                            ft.Text(" 已完成 ", size=11, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
+                            ft.Container(height=1, bgcolor=self._get_theme_color("DIVIDER", "#E0E0E0"), expand=True),
                             ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
@@ -255,8 +374,13 @@ class DeskApp(ft.Container):
                 card = self._build_card(task.to_dict())
                 self._task_scroll.controls.append(card)
                 self._task_card_controls.append(card)
-        # 刷新页面显示
+        # 刷新页面显示（先注册控件，再应用主题）
         self._page.update()
+        if self.theme_manager.is_dark:
+            theme = self.theme_manager.current
+            for card in self._task_card_controls:
+                card.update_theme(theme)
+            self._page.update()
 
     def _build_card(self, task_data: dict) -> TaskCard:
         return TaskCard(
@@ -351,10 +475,13 @@ class DeskApp(ft.Container):
         self._detail_title_field = ft.TextField(
             value=self._detail_data.get('title', ''),
             hint_text="任务标题",
+            hint_style=ft.TextStyle(color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
+            color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
             border=ft.InputBorder.NONE,
             text_size=16,
             dense=True,
             expand=True,
+            bgcolor="transparent",
         )
         title_row = row_container(
             ft.Row([
@@ -377,17 +504,17 @@ class DeskApp(ft.Container):
         for i, step in enumerate(steps):
             if i > 0:
                 self._detail_steps_col.controls.append(
-                    ft.Divider(height=1, color="#F0F0F0")
+                    ft.Divider(height=1, color=self._get_theme_color("STEP_DIVIDER", "#F0F0F0"))
                 )
             self._build_step_row(step)
 
         # ── 添加步骤输入框（放在步骤列表末尾）──
         self._detail_add_step_field = ft.TextField(
             hint_text="添加步骤...",
-            hint_style=ft.TextStyle(color="#4DABF7", size=13),
+            hint_style=ft.TextStyle(color=self._get_theme_color("ADD_STEP_HINT", "#4DABF7"), size=13),
             on_submit=self._on_detail_add_step,
             border=ft.InputBorder.NONE,
-            color="#4DABF7",
+            color=self._get_theme_color("ADD_STEP_TEXT", "#4DABF7"),
             dense=True,
             expand=True,
         )
@@ -402,7 +529,7 @@ class DeskApp(ft.Container):
         # 步骤多于 0 条时加分割线
         if len(steps) > 0:
             self._detail_steps_col.controls.append(
-                ft.Divider(height=1, color="#F0F0F0")
+                ft.Divider(height=1, color=self._get_theme_color("STEP_DIVIDER", "#F0F0F0"))
             )
         self._detail_steps_col.controls.append(self._detail_add_step_row)
 
@@ -417,7 +544,7 @@ class DeskApp(ft.Container):
         self._reminder_display_freq = self._detail_data.get('reminder_frequency', 'once')
 
         # 状态文字
-        self._reminder_status_text = ft.Text("", size=12, color="#4CAF50")
+        self._reminder_status_text = ft.Text("", size=12, color=self._get_theme_color("SUCCESS", "#4CAF50"))
         self._reminder_status_row = ft.Row([
             ft.Text("", width=LABEL_W),
             self._reminder_status_text,
@@ -429,7 +556,7 @@ class DeskApp(ft.Container):
             advance_text = "提前5分钟" if self._reminder_display_advance == 5 else "准时"
             reminder_info = ft.Text(
                 f"🔔 {self._reminder_display_date} {self._reminder_display_time} · {advance_text} · {freq_text}",
-                size=13, color=TEXT_PRIMARY,
+                size=13, color=self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
             )
             reminder_action_row = ft.Row([
                 ft.Text("", width=LABEL_W),
@@ -441,13 +568,13 @@ class DeskApp(ft.Container):
                 ft.TextButton(
                     "删除提醒", icon=ft.Icons.DELETE,
                     on_click=lambda e: self._delete_reminder(),
-                    style=ft.ButtonStyle(color="#E4405F"),
+                    style=ft.ButtonStyle(color=self._get_theme_color("DANGER", "#E4405F")),
                 ),
             ], spacing=8)
             reminder_row = row_container(
                 ft.Column([
                     ft.Row([
-                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY, width=LABEL_W),
+                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY), width=LABEL_W),
                         reminder_info,
                     ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     reminder_action_row,
@@ -458,7 +585,7 @@ class DeskApp(ft.Container):
             reminder_row = row_container(
                 ft.Column([
                     ft.Row([
-                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY, width=LABEL_W),
+                        ft.Text("🔔 提醒我", size=13, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY), width=LABEL_W),
                         ft.TextButton(
                             "设置提醒", icon=ft.Icons.ADD_ALERT,
                             on_click=lambda e: self._show_reminder_dialog(),
@@ -474,7 +601,7 @@ class DeskApp(ft.Container):
             controls=[
                 title_row,
                 steps_row,
-                ft.Divider(height=1, color="#E0E0E0"),
+                ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                 reminder_row,
             ],
             spacing=6,
@@ -496,11 +623,11 @@ class DeskApp(ft.Container):
 
         # 勾选圈
         chk = ft.Text("●" if completed else "○", size=16, width=22,
-                      color="#ADB5BD" if completed else TEXT_PRIMARY)
+                      color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
 
         # 编辑框：已完成 → 灰色 + 删除线；未完成 → 正常
         tf_style = ft.TextStyle(
-            color="#ADB5BD" if completed else TEXT_PRIMARY,
+            color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
             decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
         )
         tf = ft.TextField(
@@ -508,7 +635,7 @@ class DeskApp(ft.Container):
             hint_text="步骤",
             expand=True,
             text_style=tf_style,
-            color="#ADB5BD" if completed else TEXT_PRIMARY,
+            color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
             border=ft.InputBorder.NONE,
             dense=True,
         )
@@ -549,13 +676,13 @@ class DeskApp(ft.Container):
                 item['step']['completed'] = completed
                 # 勾选圈
                 item['chk'].value = "●" if completed else "○"
-                item['chk'].color = "#ADB5BD" if completed else TEXT_PRIMARY
+                item['chk'].color = self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)
                 # 编辑框：文字样式
                 item['tf'].text_style = ft.TextStyle(
-                    color="#ADB5BD" if completed else TEXT_PRIMARY,
+                    color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
                     decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
                 )
-                item['tf'].color = "#ADB5BD" if completed else TEXT_PRIMARY
+                item['tf'].color = self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)
                 # 更新菜单文字
                 menu_btn = item['row'].controls[-1]
                 menu_btn.items[0].content.value = "标记为未完成" if completed else "标记为已完成"
@@ -580,11 +707,11 @@ class DeskApp(ft.Container):
         controls = []
         for i, item in enumerate(self._detail_step_fields):
             if i > 0:
-                controls.append(ft.Divider(height=1, color="#F0F0F0"))
+                controls.append(ft.Divider(height=1, color=self._get_theme_color("STEP_DIVIDER", "#F0F0F0")))
             controls.append(item['row'])
         # 末尾保留添加步骤输入框
         if len(controls) > 0:
-            controls.append(ft.Divider(height=1, color="#F0F0F0"))
+            controls.append(ft.Divider(height=1, color=self._get_theme_color("STEP_DIVIDER", "#F0F0F0")))
         if hasattr(self, '_detail_add_step_row') and self._detail_add_step_row is not None:
             controls.append(self._detail_add_step_row)
         self._detail_steps_col.controls = controls
@@ -612,7 +739,7 @@ class DeskApp(ft.Container):
         # 在添加输入框之前插入分割线 + 新步骤行
         idx = len(self._detail_steps_col.controls) - 1  # 添加输入框位置
         if len(self._detail_step_fields) > 0:
-            self._detail_steps_col.controls.insert(idx, ft.Divider(height=1, color="#F0F0F0"))
+            self._detail_steps_col.controls.insert(idx, ft.Divider(height=1, color=self._get_theme_color("STEP_DIVIDER", "#F0F0F0")))
             idx += 1
         self._build_step_row(new_step)
         # 把新步骤行移动到添加输入框之前
@@ -769,7 +896,7 @@ $notify.Dispose()
                     f"✅ 已添加提醒 日期 {dlg_state['date']} "
                     f"时间 {dlg_state['time']}，频率 {freq_text}"
                 )
-                self._reminder_status_text.color = "#4CAF50"
+                self._reminder_status_text.color = self._get_theme_color("SUCCESS", "#4CAF50")
                 self._reminder_status_row.update()
 
             advance_radio = ft.RadioGroup(
@@ -799,52 +926,52 @@ $notify.Dispose()
                         ft.Row([
                             ft.Text("⏰ 设置提醒", size=18, weight=ft.FontWeight.BOLD),
                         ]),
-                        ft.Divider(height=1, color="#E0E0E0"),
-                        ft.Text("日期", size=12, color=TEXT_SECONDARY),
+                        ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
+                        ft.Text("日期", size=12, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         ft.Container(
                             content=ft.Row([
                                 ft.Icon(ft.Icons.CALENDAR_MONTH, color=PRIMARY, size=18),
                                 date_text,
-                                ft.Text("点击修改 →", size=11, color=TEXT_SECONDARY),
+                                ft.Text("点击修改 →", size=11, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                             ], spacing=8),
                             on_click=pick_date,
                             padding=ft.Padding.symmetric(vertical=12, horizontal=12),
                             border_radius=ft.BorderRadius.all(8),
-                            bgcolor="#F5F5F5",
+                            bgcolor=self._get_theme_color("BG", "#F5F5F5"),
                         ),
-                        ft.Divider(height=1, color="#E0E0E0"),
-                        ft.Text("时间", size=12, color=TEXT_SECONDARY),
+                        ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
+                        ft.Text("时间", size=12, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         ft.Container(
                             content=ft.Row([
                                 ft.Icon(ft.Icons.ACCESS_TIME, color=PRIMARY, size=18),
                                 time_text,
-                                ft.Text("点击修改 →", size=11, color=TEXT_SECONDARY),
+                                ft.Text("点击修改 →", size=11, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                             ], spacing=8),
                             on_click=pick_time,
                             padding=ft.Padding.only(left=12, top=12, right=12, bottom=12),
                             border_radius=ft.BorderRadius.all(8),
-                            bgcolor="#F5F5F5",
+                            bgcolor=self._get_theme_color("BG", "#F5F5F5"),
                         ),
-                        ft.Divider(height=1, color="#E0E0E0"),
-                        ft.Text("提前提醒", size=12, color=TEXT_SECONDARY),
+                        ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
+                        ft.Text("提前提醒", size=12, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         advance_radio,
-                        ft.Divider(height=1, color="#E0E0E0"),
-                        ft.Text("重复频率", size=12, color=TEXT_SECONDARY),
+                        ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
+                        ft.Text("重复频率", size=12, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         freq_radio,
-                        ft.Divider(height=1, color="#E0E0E0"),
+                        ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                         ft.Row([
                             ft.TextButton("取消", on_click=lambda e: close_dlg()),
                             ft.TextButton("保存", on_click=on_save, style=ft.ButtonStyle(color=PRIMARY)),
                         ], alignment=ft.MainAxisAlignment.END, spacing=8),
                     ], spacing=8, scroll=ft.ScrollMode.AUTO),
-                    bgcolor=ft.Colors.WHITE,
+                    bgcolor=self._get_theme_color("DIALOG_BG", ft.Colors.WHITE),
                     border_radius=ft.BorderRadius.all(12),
                     padding=20,
                     width=420,
                     shadow=ft.BoxShadow(blur_radius=20, color="#40000000", offset=ft.Offset(0, 8)),
                     on_click=lambda e: None,  # 阻止事件冒泡到外层遮罩
                 ),
-                bgcolor="#80000000",  # 半透明黑色遮罩
+                bgcolor=self._get_theme_color("OVERLAY_BG", "#80000000"),  # 半透明遮罩
                 alignment=ft.alignment.Alignment(0, 0),
                 expand=True,
                 on_click=lambda e: close_dlg(),  # 点击遮罩关闭
@@ -912,34 +1039,34 @@ $notify.Dispose()
             content=ft.Container(
                 content=ft.Column([
                     ft.Text("选择时间", size=18, weight=ft.FontWeight.BOLD),
-                    ft.Divider(height=1, color="#E0E0E0"),
+                    ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                     ft.Row([
                         ft.Column([
                             ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_hour, icon_color=PRIMARY),
                             hour_display,
                             ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_hour, icon_color=PRIMARY),
                         ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                        ft.Text(":", size=28, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY),
+                        ft.Text(":", size=28, weight=ft.FontWeight.BOLD, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                         ft.Column([
                             ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_UP, on_click=inc_minute, icon_color=PRIMARY),
                             minute_display,
                             ft.IconButton(icon=ft.Icons.KEYBOARD_ARROW_DOWN, on_click=dec_minute, icon_color=PRIMARY),
                         ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Divider(height=1, color="#E0E0E0"),
+                    ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                     ft.Row([
                         ft.TextButton("取消", on_click=lambda e: close_sub()),
                         ft.TextButton("确定", on_click=confirm_time, style=ft.ButtonStyle(color=PRIMARY)),
                     ], alignment=ft.MainAxisAlignment.END, spacing=8),
                 ], spacing=12, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                bgcolor=ft.Colors.WHITE,
+                bgcolor=self._get_theme_color("DIALOG_BG", ft.Colors.WHITE),
                 border_radius=ft.BorderRadius.all(12),
                 padding=20,
                 width=300,
                 shadow=ft.BoxShadow(blur_radius=20, color="#40000000", offset=ft.Offset(0, 8)),
                 on_click=lambda e: None,  # 阻止事件冒泡到外层遮罩
             ),
-            bgcolor="#80000000",
+            bgcolor=self._get_theme_color("OVERLAY_BG", "#80000000"),
             alignment=ft.alignment.Alignment(0, 0),
             expand=True,
             on_click=lambda e: close_sub(),  # 点击遮罩关闭
@@ -961,7 +1088,7 @@ $notify.Dispose()
         self._load_tasks(self._current_tag_filter)
         self._show_detail_panel(self._detail_data)
         self._reminder_status_text.value = "🗑 已删除提醒"
-        self._reminder_status_text.color = TEXT_SECONDARY
+        self._reminder_status_text.color = self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)
         self._reminder_status_row.update()
 
     def _on_navigate(self, key: str):
@@ -1026,7 +1153,7 @@ $notify.Dispose()
         else:
             self._calendar_task_list.controls.append(
                 ft.Container(
-                    content=ft.Text("该日期暂无任务", size=13, color=TEXT_SECONDARY),
+                    content=ft.Text("该日期暂无任务", size=13, color=self._get_theme_color("TEXT_SECONDARY", TEXT_SECONDARY)),
                     padding=ft.Padding.symmetric(vertical=16),
                 )
             )

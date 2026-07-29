@@ -3,7 +3,7 @@
 """
 
 import flet as ft
-from .theme import PRIMARY, TEXT_SECONDARY
+from .theme import PRIMARY, TEXT_SECONDARY, CARD_BG
 
 
 class Sidebar(ft.Container):
@@ -14,7 +14,8 @@ class Sidebar(ft.Container):
         ("💼", "工作", "tag:工作"),
         ("📚", "学习", "tag:学习"),
         ("🏠", "生活", "tag:生活"),
-        ("📭", "无分类", "tag:"),
+        ("⏸", "暂时不做", "tag:"),
+        ("🚫", "就是不做", "tag:就是不做"),
         ("📅", "日历", "calendar"),
     ]
 
@@ -22,10 +23,11 @@ class Sidebar(ft.Container):
         self.on_navigate = on_navigate
         self._active = "all"
         self._nav_controls = []
+        self._theme = None  # 由外部 update_theme 设置
 
         super().__init__(
             width=180,
-            bgcolor="#FFFFFF",
+            bgcolor=CARD_BG,
             padding=ft.Padding.only(top=16, left=8, right=8),
             content=self._build(),
         )
@@ -72,13 +74,17 @@ class Sidebar(ft.Container):
     def _on_click(self, key):
         self._active = key
         # 刷新全部导航项的外观
+        theme = self._theme or {}
+        primary = theme.get("PRIMARY", PRIMARY)
+        primary_light = theme.get("PRIMARY_LIGHT", "#FFF7ED")
+        text_secondary = theme.get("TEXT_SECONDARY", TEXT_SECONDARY)
+
         for ctrl in self._nav_controls:
             k = ctrl.data
             is_active = k == key
-            ctrl.bgcolor = "#FFF7ED" if is_active else "transparent"
-            # 更新文字颜色
+            ctrl.bgcolor = primary_light if is_active else "transparent"
             row = ctrl.content
-            row.controls[1].color = PRIMARY if is_active else TEXT_SECONDARY
+            row.controls[1].color = primary if is_active else text_secondary
         self.update()
 
         if self.on_navigate:
@@ -88,3 +94,20 @@ class Sidebar(ft.Container):
         """从外部切换页面"""
         self._active = key
         self._on_click(key)
+
+    def update_theme(self, theme: dict):
+        """更新侧边栏主题颜色"""
+        self._theme = theme
+        self.bgcolor = theme.get("CARD_BG", CARD_BG)
+
+        primary = theme.get("PRIMARY", PRIMARY)
+        primary_light = theme.get("PRIMARY_LIGHT", "#FFF7ED")
+        text_secondary = theme.get("TEXT_SECONDARY", TEXT_SECONDARY)
+
+        for ctrl in self._nav_controls:
+            k = ctrl.data
+            is_active = k == self._active
+            ctrl.bgcolor = primary_light if is_active else "transparent"
+            row = ctrl.content
+            row.controls[1].color = primary if is_active else text_secondary
+        self.update()
