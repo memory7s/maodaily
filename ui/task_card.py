@@ -351,11 +351,15 @@ class TaskCard(ft.Container):
         self._rebuild_steps(task_data.get("steps", []))
         # Update title
         self.title.value = task_data.get("title", "")
-        # Update completion
+        # Update completion — 优先使用当前主题色
         completed = task_data.get("completed", False)
+        theme = getattr(self, '_theme', None) or {}
+        text_primary = theme.get("TEXT_PRIMARY", TEXT_PRIMARY)
+        text_disabled = theme.get("TEXT_DISABLED", TEXT_DISABLED)
+        primary = theme.get("PRIMARY", PRIMARY)
         self.chk.value = ICON_CHECKED if completed else ICON_UNCHECKED
-        self.chk.color = TEXT_DISABLED if completed else PRIMARY
-        self.title.color = TEXT_DISABLED if completed else TEXT_PRIMARY
+        self.chk.color = text_disabled if completed else primary
+        self.title.color = text_disabled if completed else text_primary
         # Update reminder icon
         has_reminder = bool(task_data.get('reminder_date'))
         self.reminder_icon.visible = has_reminder

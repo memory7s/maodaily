@@ -50,8 +50,9 @@ def build_header(on_calendar_toggle=None, theme_toggle_btn=None) -> ft.Container
     )
 
 
-def build_add_bar(on_add) -> ft.Container:
-    """底部添加任务栏"""
+def build_add_bar(on_add, text_color=None, fill_color="#FFFFFF", btn_color=PRIMARY) -> tuple:
+    """底部添加任务栏，返回 (container, field)"""
+    text_color = text_color or TEXT_PRIMARY
 
     field = ft.TextField(
         hint_text="添加新任务...",
@@ -61,7 +62,8 @@ def build_add_bar(on_add) -> ft.Container:
         focused_border_color=PRIMARY,
         border_radius=ft.BorderRadius.all(8),
         filled=True,
-        fill_color="#FFFFFF",
+        fill_color=fill_color,
+        color=text_color,
         expand=True,
         height=44,
         text_size=14,
@@ -77,20 +79,20 @@ def build_add_bar(on_add) -> ft.Container:
 
     btn = ft.FloatingActionButton(
         icon=ft.Icons.ADD,
-        bgcolor=PRIMARY,
+        bgcolor=btn_color,
         foreground_color="#FFFFFF",
         mini=True,
         on_click=lambda e: _do_add(field, on_add),
     )
 
-    return ft.Container(
+    return (ft.Container(
         content=ft.Row(
             controls=[field, btn],
             spacing=8,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         padding=ft.Padding.only(top=8, bottom=4),
-    )
+    ), field, btn)
 
 
 # ── 假数据（Phase 3 将替换为 task_manager.py） ──
@@ -215,6 +217,11 @@ class DeskApp(ft.Container):
         # 加载真实任务数据
         self._load_tasks(self._current_tag_filter)
 
+        # 构建添加任务栏（存储字段引用以便暗色主题更新颜色）
+        add_bar_container, self._add_bar_field, self._add_bar_btn = build_add_bar(
+            self._on_add_task, text_color=TEXT_PRIMARY, fill_color="#FFFFFF", btn_color=PRIMARY
+        )
+
         # 布局: Row(侧栏 | 任务列表 + 可能的分隔线 + 详情面板)
         self.sidebar = Sidebar(on_navigate=self._on_navigate)
         self._task_area = ft.Container(
@@ -224,7 +231,7 @@ class DeskApp(ft.Container):
                     self._header_divider,
                     self._task_list_container,
                     self._calendar_section,
-                    build_add_bar(self._on_add_task),
+                    add_bar_container,
                 ],
                 expand=True,
             ),
@@ -360,6 +367,12 @@ class DeskApp(ft.Container):
 
         # 更新主题切换按钮图标颜色
         self._theme_toggle_btn.icon_color = theme["TEXT_SECONDARY"]
+
+        # 更新添加任务栏颜色（暗色主题时背景变暗、文字变亮）
+        self._add_bar_field.fill_color = theme.get("CARD_BG", "#FFFFFF")
+        self._add_bar_field.color = theme.get("TEXT_PRIMARY", TEXT_PRIMARY)
+        self._add_bar_field.border_color = theme.get("CARD_BG", "#FFFFFF")
+        self._add_bar_btn.bgcolor = theme.get("PRIMARY", PRIMARY)
 
         # 更新任务卡片
         for card in self._task_card_controls:
@@ -590,6 +603,7 @@ class DeskApp(ft.Container):
             dense=True,
             expand=True,
             bgcolor="transparent",
+            on_submit=self._on_detail_title_submit,
         )
         title_row = ft.Row([
                 ft.Text("", width=LABEL_W),
@@ -741,29 +755,61 @@ class DeskApp(ft.Container):
 
         self._page.update()
 
-    def _build_step_row(self, step: dict):
-        """构建单条步骤行：○/●勾选圈 + 编辑框 + ⋯菜单"""
+    def _build_step_row(self, step: dict, edit_mode=False):
+        """构建单条步骤行：○/● 显示文字（自动换行，点击编辑）+ ⋯菜单
+        按回车保存并切回显示模式。
+        """
         LABEL_W = 0
         sid = step['id']
         completed = step.get('completed', False)
+        desc = step.get('description', '')
+        txt_primary = self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)
+        txt_disabled = self._get_theme_color("TEXT_DISABLED", "#ADB5BD")
 
         # 勾选圈
         chk = ft.Text("●" if completed else "○", size=16, width=22,
-                      color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY))
+                      color=txt_disabled if completed else txt_primary)
 
-        # 编辑框：已完成 → 灰色 + 删除线；未完成 → 正常
-        tf_style = ft.TextStyle(
-            color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
+        # ── 显示态：Text 自动换行 ──
+        display_style = ft.TextStyle(
+            color=txt_disabled if completed else txt_primary,
+            decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
+        )
+        display_text = ft.Text(
+            value=desc,
+            expand=True,
+            no_wrap=False,
+            style=display_style,
+        )
+
+        # ── 编辑态：TextField ──
+        edit_style = ft.TextStyle(
+            color=txt_disabled if completed else txt_primary,
             decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
         )
         tf = ft.TextField(
-            value=step.get('description', ''),
+            value=desc,
             hint_text="步骤",
             expand=True,
-            text_style=tf_style,
-            color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
+            text_style=edit_style,
+            color=txt_disabled if completed else txt_primary,
             border=ft.InputBorder.NONE,
             dense=True,
+            visible=False,  # 默认显示态
+            on_submit=lambda e: self._on_detail_step_submit(sid),
+        )
+
+        # 点击显示文字 → 切换到编辑态
+        def _enter_edit(e=None):
+            display_text_container.visible = False
+            tf.visible = True
+            tf.value = step.get('description', '')
+            self._detail_panel.update()
+
+        display_text_container = ft.Container(
+            content=display_text,
+            expand=True,
+            on_click=_enter_edit,
         )
 
         # ⋯ 菜单按钮
@@ -784,6 +830,7 @@ class DeskApp(ft.Container):
             controls=[
                 ft.Text("", width=LABEL_W),
                 ft.Container(content=chk, on_click=lambda e, sid=sid: self._on_detail_toggle_step(sid)),
+                display_text_container,
                 tf,
                 menu_btn,
             ],
@@ -791,7 +838,10 @@ class DeskApp(ft.Container):
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        self._detail_step_fields.append({'chk': chk, 'tf': tf, 'step': step, 'row': row})
+        self._detail_step_fields.append({
+            'chk': chk, 'tf': tf, 'step': step, 'row': row,
+            'display_text': display_text, 'display_container': display_text_container,
+        })
         self._detail_steps_col.controls.append(row)
 
     def _on_detail_toggle_title(self):
@@ -804,6 +854,19 @@ class DeskApp(ft.Container):
         self.task_manager.toggle_task_complete(self._detail_data['id'])
         self._load_tasks(self._current_tag_filter)
         self._detail_panel.update()
+
+    def _on_detail_title_submit(self, e=None):
+        """标题按回车时保存并更新对应卡片"""
+        new_title = self._detail_title_field.value.strip()
+        if not new_title:
+            return
+        self._detail_data['title'] = new_title
+        self.task_manager.update_task(self._detail_data)
+        # 找到对应卡片更新标题（避免全量重载闪烁）
+        for card in self._task_card_controls:
+            if card._data.get('id') == self._detail_data['id']:
+                card.update_data(self._detail_data)
+                break
 
     def _on_detail_toggle_step(self, step_id: str):
         """切换步骤完成状态（同步更新勾选圈 + 删除线 + 颜色）"""
@@ -820,6 +883,12 @@ class DeskApp(ft.Container):
                     decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
                 )
                 item['tf'].color = self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)
+                # 同步更新显示态文字
+                if 'display_text' in item:
+                    item['display_text'].style = ft.TextStyle(
+                        color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
+                        decoration=ft.TextDecoration.LINE_THROUGH if completed else ft.TextDecoration.NONE,
+                    )
                 # 更新菜单文字
                 menu_btn = item['row'].controls[-1]
                 menu_btn.items[0].content.value = "标记为未完成" if completed else "标记为已完成"
@@ -837,6 +906,24 @@ class DeskApp(ft.Container):
             item for item in self._detail_step_fields if item['step']['id'] != step_id
         ]
         self._rebuild_detail_steps_controls()
+        self._detail_panel.update()
+
+    def _on_detail_step_submit(self, step_id: str):
+        """步骤按回车时保存并退出编辑态"""
+        self._save_detail()
+        # 切回显示态
+        for item in self._detail_step_fields:
+            if item['step']['id'] == step_id:
+                item['display_text'].value = item['tf'].value.strip()
+                item['tf'].visible = False
+                item['display_text'].visible = True
+                item['display_container'].visible = True
+                break
+        # 更新卡片列表中的步骤状态
+        for card in self._task_card_controls:
+            if card._data.get('id') == self._detail_data['id']:
+                card.update_data(self._detail_data)
+                break
         self._detail_panel.update()
 
     def _rebuild_detail_steps_controls(self):
