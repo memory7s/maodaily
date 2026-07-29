@@ -24,6 +24,7 @@ class Sidebar(ft.Container):
         self._active = "all"
         self._nav_controls = []
         self._theme = None  # 由外部 update_theme 设置
+        self._title_container = None  # 标题容器引用，用于窄栏隐藏
 
         super().__init__(
             width=180,
@@ -34,18 +35,17 @@ class Sidebar(ft.Container):
 
     def _build(self):
         col = ft.Column(spacing=4, controls=[])
-        # 标题
-        col.controls.append(
-            ft.Container(
-                content=ft.Text(
-                    "AliveDaily",
-                    size=18,
-                    weight=ft.FontWeight.BOLD,
-                    color=PRIMARY,
-                ),
-                padding=ft.Padding.only(left=12, bottom=16),
-            )
+        # 标题（窄栏时隐藏）
+        self._title_container = ft.Container(
+            content=ft.Text(
+                "AliveDaily",
+                size=18,
+                weight=ft.FontWeight.BOLD,
+                color=PRIMARY,
+            ),
+            padding=ft.Padding.only(left=12, bottom=16),
         )
+        col.controls.append(self._title_container)
 
         for icon, label, key in self.NAV_ITEMS:
             btn = self._nav_item(icon, label, key)
@@ -94,6 +94,11 @@ class Sidebar(ft.Container):
         """从外部切换页面"""
         self._active = key
         self._on_click(key)
+
+    def set_width(self, w: int):
+        """设置侧栏宽度，窄于阈值时隐藏标题"""
+        if self._title_container:
+            self._title_container.visible = w > 100
 
     def update_theme(self, theme: dict):
         """更新侧边栏主题颜色"""

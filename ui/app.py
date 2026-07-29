@@ -183,9 +183,34 @@ class DeskApp(ft.Container):
         )
         self._detail_divider = ft.VerticalDivider(width=1, color="#E0E0E0", visible=False)
 
+        # 侧栏宽度控制
+        self._sidebar_preferred = 180   # 用户拖拽设定的目标宽度
+        self._sidebar_current = 180     # 实际生效宽度（可能被窗口压缩）
+        self._sidebar_min_width = 52
+        self._sidebar_detail_saved = None  # 打开详情面板时保存的用户设定宽度
+        self._sidebar_max_width = 200
+        self._middle_min_width = 380
+        self._sidebar_divider_hit = 8   # 分隔线触摸区宽度（px）
+
+        # 可拖拽的侧栏分隔线
+        self._sidebar_divider_visual = ft.Container(
+            width=self._sidebar_divider_hit,
+            border=ft.Border(
+                left=ft.BorderSide(1, "#E0E0E0"),
+                right=ft.BorderSide(0, "transparent"),
+                top=ft.BorderSide(0, "transparent"),
+                bottom=ft.BorderSide(0, "transparent"),
+            ),
+        )
+        self._sidebar_divider = ft.GestureDetector(
+            content=self._sidebar_divider_visual,
+            mouse_cursor=ft.MouseCursor.RESIZE_COLUMN,
+            on_pan_update=self._on_sidebar_divider_pan,
+            on_pan_end=self._on_sidebar_divider_pan_end,
+        )
+
         # 存储 divider 引用以便主题切换时更新
         self._header_divider = ft.Divider(height=1, color="#E0E0E0")
-        self._sidebar_divider = ft.VerticalDivider(width=1, color="#E0E0E0")
 
         # 加载真实任务数据
         self._load_tasks(self._current_tag_filter)
@@ -234,6 +259,9 @@ class DeskApp(ft.Container):
             spacing=0,
         )
 
+        # 窗口缩放时自动压缩侧栏以保护中间列宽度
+        self._page.on_resize = self._on_window_resize
+
     # ── 主题切换 ──
 
     def _get_theme_color(self, key: str, default: str) -> str:
@@ -247,6 +275,66 @@ class DeskApp(ft.Container):
         self._theme_toggle_btn.icon = ft.Icons.LIGHT_MODE if is_dark else ft.Icons.DARK_MODE
         self._theme_toggle_btn.tooltip = "切换亮色主题" if is_dark else "切换暗色主题"
         self._update_ui_colors(new_theme)
+
+    # ── 侧栏宽度控制 ──
+
+    def _on_sidebar_divider_pan(self, e: ft.DragUpdateEvent):
+        """拖拽分隔线调整侧栏宽度（节流：只更新侧栏自身）"""
+        if not e.local_delta:
+            return
+        self._sidebar_preferred += e.local_delta.x
+        self._sidebar_preferred = max(self._sidebar_min_width, min(self._sidebar_preferred, self._sidebar_max_width))
+
+        # 拖拽期间直接用 preferred 宽度，不触发全树更新
+        self._sidebar_current = self._sidebar_preferred
+        show = self._sidebar_current > 0
+        self.sidebar.visible = show
+        self._sidebar_divider.visible = show
+        if show:
+            self.sidebar.width = self._sidebar_current
+            self.sidebar.set_width(self._sidebar_current)
+        # 仅更新侧栏和分隔线，轻量级
+        try:
+            self.sidebar.update()
+            self._sidebar_divider.update()
+        except RuntimeError:
+            pass
+
+    def _on_sidebar_divider_pan_end(self, e=None):
+        """拖拽结束，触发全树刷新确保布局对齐"""
+        self._apply_sidebar_width()
+
+    def _on_window_resize(self, e=None):
+        """窗口缩放时自动压缩侧栏，保证中间列最低宽度"""
+        self._apply_sidebar_width()
+
+    def _apply_sidebar_width(self):
+        """应用侧栏宽度（考虑窗口压缩）"""
+        if not self.page:
+            return
+        w = self._page.width
+        if not w:
+            return
+        # 中间列至少 _middle_min_width，分隔线占 _sidebar_divider_hit
+        max_allowed = max(0, w - self._middle_min_width - self._sidebar_divider_hit)
+
+        if max_allowed < self._sidebar_min_width:
+            # 窗口太窄，连最小侧栏都放不下 → 隐藏
+            self._sidebar_current = 0
+        else:
+            self._sidebar_current = min(self._sidebar_preferred, max_allowed)
+            self._sidebar_current = max(self._sidebar_min_width, min(self._sidebar_current, self._sidebar_max_width))
+
+        show = self._sidebar_current > 0
+        self.sidebar.visible = show
+        self._sidebar_divider.visible = show
+        if show:
+            self.sidebar.width = self._sidebar_current
+            self.sidebar.set_width(self._sidebar_current)
+        try:
+            self.update()
+        except RuntimeError:
+            pass
 
     def _update_ui_colors(self, theme: dict):
         """更新所有 UI 元素的颜色"""
@@ -262,7 +350,12 @@ class DeskApp(ft.Container):
         # 更新分割线
         divider_color = theme["DIVIDER"]
         self._header_divider.color = divider_color
-        self._sidebar_divider.color = divider_color
+        self._sidebar_divider_visual.border = ft.Border(
+            left=ft.BorderSide(1, divider_color),
+            right=ft.BorderSide(0, "transparent"),
+            top=ft.BorderSide(0, "transparent"),
+            bottom=ft.BorderSide(0, "transparent"),
+        )
         self._detail_divider.color = divider_color
 
         # 更新主题切换按钮图标颜色
@@ -640,6 +733,12 @@ class DeskApp(ft.Container):
         self._detail_area.visible = True
         self._detail_divider.visible = True
         self._task_area.expand = 1
+
+        # 打开详情面板时，侧栏自动压缩到最小值腾空间
+        self._sidebar_detail_saved = self._sidebar_preferred
+        self._sidebar_preferred = self._sidebar_min_width
+        self._apply_sidebar_width()
+
         self._page.update()
 
     def _build_step_row(self, step: dict):
@@ -762,6 +861,13 @@ class DeskApp(ft.Container):
         self._detail_area.visible = False
         self._detail_divider.visible = False
         self._task_area.expand = True
+
+        # 关闭详情面板时恢复侧栏宽度
+        if self._sidebar_detail_saved is not None:
+            self._sidebar_preferred = self._sidebar_detail_saved
+            self._sidebar_detail_saved = None
+            self._apply_sidebar_width()
+
         self._page.update()
 
     def _on_detail_add_step(self, e):
