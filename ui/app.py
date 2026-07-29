@@ -286,6 +286,10 @@ class DeskApp(ft.Container):
         # 更新日历分区
         self._update_calendar_section_colors(theme)
 
+        # 如果详情面板打开，重建以应用新主题色
+        if self._detail_panel.visible and self._detail_data is not None:
+            self._show_detail_panel(self._detail_data)
+
         self._page.update()
 
     def _update_header_colors(self, theme: dict):
@@ -471,7 +475,12 @@ class DeskApp(ft.Container):
         # 标签列固定宽度
         LABEL_W = 70
 
-        # ── 标题行：空标签 + 标题输入框 ──
+        # ── 标题行：70px标签列 + 完成圈 + 标题输入框 + 菜单占位 ──
+        completed = self._detail_data.get('completed', False)
+        self._detail_title_chk = ft.Text(
+            "●" if completed else "○", size=16, width=22,
+            color=self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY),
+        )
         self._detail_title_field = ft.TextField(
             value=self._detail_data.get('title', ''),
             hint_text="任务标题",
@@ -483,16 +492,15 @@ class DeskApp(ft.Container):
             expand=True,
             bgcolor="transparent",
         )
-        title_row = row_container(
-            ft.Row([
+        title_row = ft.Row([
                 ft.Text("", width=LABEL_W),
+                ft.Container(content=self._detail_title_chk, on_click=lambda e: self._on_detail_toggle_title()),
                 self._detail_title_field,
             ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        )
 
-        # ── 步骤列表容器 ──
+        # ── 步骤列表容器（标题行作为第一个元素，确保对齐）──
         self._detail_steps_col = ft.Column(
-            controls=[],
+            controls=[title_row],
             spacing=4,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
@@ -533,8 +541,8 @@ class DeskApp(ft.Container):
             )
         self._detail_steps_col.controls.append(self._detail_add_step_row)
 
-        # 步骤列表整体用 row_container 包裹（含 70px 标签列占位）
-        steps_row = row_container(self._detail_steps_col, expand=True)
+        # 步骤列表整体用 row_container 包裹（标题行已在列内首个元素）
+        steps_section = row_container(self._detail_steps_col, expand=True)
 
         # ── 提醒设置区（按钮触发弹窗）──
         has_reminder = bool(self._detail_data.get('reminder_date', ''))
@@ -599,8 +607,7 @@ class DeskApp(ft.Container):
         # ── 面板主体：标题/步骤/提醒 统一网格对齐 ──
         panel_content = ft.Column(
             controls=[
-                title_row,
-                steps_row,
+                steps_section,
                 ft.Divider(height=1, color=self._get_theme_color("DIVIDER", "#E0E0E0")),
                 reminder_row,
             ],
@@ -668,6 +675,17 @@ class DeskApp(ft.Container):
         self._detail_step_fields.append({'chk': chk, 'tf': tf, 'step': step, 'row': row})
         self._detail_steps_col.controls.append(row)
 
+    def _on_detail_toggle_title(self):
+        """切换任务标题的完成状态（同步更新标题圈 + 标题样式 + 持久化）"""
+        completed = not self._detail_data.get('completed', False)
+        self._detail_data['completed'] = completed
+        self._detail_title_chk.value = "●" if completed else "○"
+        self._detail_title_chk.color = self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)
+        self._detail_title_field.color = self._get_theme_color("TEXT_DISABLED", "#ADB5BD") if completed else self._get_theme_color("TEXT_PRIMARY", TEXT_PRIMARY)
+        self.task_manager.toggle_task_complete(self._detail_data['id'])
+        self._load_tasks(self._current_tag_filter)
+        self._detail_panel.update()
+
     def _on_detail_toggle_step(self, step_id: str):
         """切换步骤完成状态（同步更新勾选圈 + 删除线 + 颜色）"""
         for item in self._detail_step_fields:
@@ -703,8 +721,8 @@ class DeskApp(ft.Container):
         self._detail_panel.update()
 
     def _rebuild_detail_steps_controls(self):
-        """重建步骤列表控件，在步骤行之间插入分割线，末尾保留添加输入框"""
-        controls = []
+        """重建步骤列表控件，保留标题行(索引0)，在步骤行之间插入分割线，末尾保留添加输入框"""
+        controls = [self._detail_steps_col.controls[0]]  # 保留标题行
         for i, item in enumerate(self._detail_step_fields):
             if i > 0:
                 controls.append(ft.Divider(height=1, color=self._get_theme_color("STEP_DIVIDER", "#F0F0F0")))
