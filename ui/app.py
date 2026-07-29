@@ -23,6 +23,7 @@ def build_header(on_calendar_toggle=None, theme_toggle_btn=None) -> ft.Container
             icon=ft.Icons.CALENDAR_MONTH,
             icon_color=TEXT_SECONDARY,
             tooltip="日历",
+            visible=False,  # 暂时隐藏，保留左侧导航栏日历入口
             on_click=on_calendar_toggle,
         ),
     ]
@@ -1135,6 +1136,7 @@ $notify.Dispose()
 
     def _show_calendar(self):
         """切换到日历视图"""
+        self._hide_detail_panel()  # 关闭右侧详情面板
         self._is_calendar_mode = True
         self._calendar_date_filter = None
         # 更新日历任务计数
