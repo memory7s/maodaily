@@ -242,12 +242,31 @@ class TaskManager:
         return tasks
  
     def get_task_count_by_date(self) -> dict:
-        """返回 {YYYY-MM-DD: 任务数} 字典，供万年历标记使用"""
+        """返回 {YYYY-MM-DD: 任务数} 字典，基于 created_at 和 reminder_date"""
         counts: dict = {}
         for task in self.tasks:
+            # 创建日期
             try:
                 date_str = datetime.fromisoformat(task.created_at).strftime("%Y-%m-%d")
                 counts[date_str] = counts.get(date_str, 0) + 1
             except (ValueError, TypeError):
                 pass
+            # 提醒日期
+            if task.reminder_date:
+                counts[task.reminder_date] = counts.get(task.reminder_date, 0) + 1
         return counts
+
+    def get_tasks_by_date(self, date_str: str) -> List[Task]:
+        """返回指定日期的所有任务（基于 created_at 或 reminder_date）"""
+        result = []
+        for task in self.tasks:
+            try:
+                created_date = datetime.fromisoformat(task.created_at).strftime("%Y-%m-%d")
+                if created_date == date_str:
+                    result.append(task)
+                    continue
+            except (ValueError, TypeError):
+                pass
+            if task.reminder_date == date_str:
+                result.append(task)
+        return result

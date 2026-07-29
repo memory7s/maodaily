@@ -7,6 +7,7 @@ import flet as ft
 from .theme import PRIMARY, BG, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG
 from .sidebar import Sidebar
 from .task_card import TaskCard
+from .calendar_view import CalendarView
 from datetime import datetime
 from task_manager import TaskManager
 
@@ -103,6 +104,10 @@ class DeskApp(ft.Container):
         # 当前 tag 筛选（None=全部，字符串=特定 tag）
         self._current_tag_filter = None
 
+        # 日历模式状态
+        self._is_calendar_mode = False
+        self._calendar_date_filter = None  # 当前日历选中的日期
+
         # 详情面板状态
         self._detail_task_id = None
         self._detail_data = None
@@ -118,6 +123,39 @@ class DeskApp(ft.Container):
         self._task_list_container = ft.Container(
             content=self._task_scroll,
             expand=True,
+        )
+
+        # 构建日历视图
+        self._calendar_view = CalendarView(
+            on_date_select=self._on_calendar_date_select,
+            task_counts=self.task_manager.get_task_count_by_date(),
+        )
+        self._calendar_back_btn = ft.TextButton(
+            "← 返回任务列表",
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda e: self._on_navigate("all"),
+            style=ft.ButtonStyle(color=TEXT_SECONDARY),
+        )
+        self._calendar_task_list = ft.Column(spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+        self._calendar_section = ft.Column(
+            controls=[
+                self._calendar_view,
+                ft.Divider(height=1, color="#E0E0E0"),
+                ft.Container(
+                    content=ft.Row([
+                        ft.Text("📋 选中日期的任务", size=13, weight=ft.FontWeight.BOLD, color=TEXT_SECONDARY),
+                        self._calendar_back_btn,
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    padding=ft.Padding.symmetric(vertical=8),
+                ),
+                ft.Container(
+                    content=self._calendar_task_list,
+                    expand=True,
+                ),
+            ],
+            spacing=0,
+            expand=True,
+            visible=False,
         )
 
         # 构建右侧详情面板（初始隐藏，无内容）
@@ -139,9 +177,10 @@ class DeskApp(ft.Container):
         self._task_area = ft.Container(
             content=ft.Column(
                 controls=[
-                    build_header(),
+                    build_header(on_calendar_toggle=lambda: self._toggle_calendar()),
                     ft.Divider(height=1, color="#E0E0E0"),
                     self._task_list_container,
+                    self._calendar_section,
                     build_add_bar(self._on_add_task),
                 ],
                 expand=True,
@@ -181,6 +220,12 @@ class DeskApp(ft.Container):
 
     def _load_tasks(self, tag_filter: str = None):
         """从 TaskManager 读取任务并填充 UI，可按 tag 筛选"""
+        # 如果正在日历模式，刷新日历任务列表
+        if self._is_calendar_mode and self._calendar_date_filter:
+            self._calendar_view.update_task_counts(self.task_manager.get_task_count_by_date())
+            self._on_calendar_date_select(self._calendar_date_filter)
+            return
+
         self._task_scroll.controls.clear()
         self._task_card_controls.clear()
         # 获取任务列表（Task 实例）
@@ -922,6 +967,12 @@ $notify.Dispose()
     def _on_navigate(self, key: str):
         """切换页面 / 筛选"""
         print(f"[navigate] -> {key}")
+        if key == "calendar":
+            self._show_calendar()
+            return
+        # 非日历页面 → 确保日历隐藏
+        if self._is_calendar_mode:
+            self._hide_calendar()
         if key == "today" or key == "all":
             self._current_tag_filter = None
         elif key.startswith("tag:"):
@@ -929,6 +980,57 @@ $notify.Dispose()
         else:
             return
         self._load_tasks(self._current_tag_filter)
+
+    def _show_calendar(self):
+        """切换到日历视图"""
+        self._is_calendar_mode = True
+        self._calendar_date_filter = None
+        # 更新日历任务计数
+        self._calendar_view.update_task_counts(self.task_manager.get_task_count_by_date())
+        # 切换可见性
+        self._task_list_container.visible = False
+        self._calendar_section.visible = True
+        # 隐藏添加任务栏
+        add_bar = self._task_area.content.controls[-1]
+        add_bar.visible = False
+        # 清空日历任务列表
+        self._calendar_task_list.controls.clear()
+        self._page.update()
+
+    def _hide_calendar(self):
+        """从日历视图切换回任务列表"""
+        self._is_calendar_mode = False
+        self._calendar_date_filter = None
+        self._task_list_container.visible = True
+        self._calendar_section.visible = False
+        add_bar = self._task_area.content.controls[-1]
+        add_bar.visible = True
+        self._page.update()
+
+    def _toggle_calendar(self):
+        """顶部日历图标点击：切换日历/任务列表"""
+        if self._is_calendar_mode:
+            self._on_navigate("all")
+        else:
+            self._on_navigate("calendar")
+
+    def _on_calendar_date_select(self, date_str: str):
+        """日历日期点击回调：筛选该日期的任务"""
+        self._calendar_date_filter = date_str
+        tasks = self.task_manager.get_tasks_by_date(date_str)
+        self._calendar_task_list.controls.clear()
+        if tasks:
+            for task in tasks:
+                card = self._build_card(task.to_dict())
+                self._calendar_task_list.controls.append(card)
+        else:
+            self._calendar_task_list.controls.append(
+                ft.Container(
+                    content=ft.Text("该日期暂无任务", size=13, color=TEXT_SECONDARY),
+                    padding=ft.Padding.symmetric(vertical=16),
+                )
+            )
+        self._page.update()
 
     def _on_add_task(self, title: str):
         """添加任务回调 – 带上当前 tag 筛选"""
