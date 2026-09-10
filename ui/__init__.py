@@ -1,1 +1,1 @@
-# AliveDaily UI 包
+# MaoDaily UI 包（原 AliveDaily）

@@ -26,6 +26,13 @@ Thumbs.db
 # Project temp
 work/
 *.spec
+app_run.err
+app_run.log
+check_*.py
+fix_*.py
 
-# Data (optional - keep if you want empty template)
-data/tasks.json
+# Data (never commit user data)
+data/
+
+# Local project instructions (not part of the open-source project)
+AGENTS.md

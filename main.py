@@ -1,5 +1,5 @@
 """
-AliveDaily — 桌面每日计划管理工具
+MaoDaily — 桌面每日计划管理工具（原 AliveDaily，猫系列产品）
 
 使用方法:
   flet run main.py          # 开发模式 (热重载)
@@ -14,8 +14,15 @@ from reminder_service import start_reminder_service
 
 
 def main(page: ft.Page):
+    # ── 自定义字体（RemixIcon 图标 + Geist 正文英文/数字）──
+    page.fonts = {
+        "remixicon": "/fonts/remixicon.ttf",
+        "Geist": "/fonts/Geist.ttf",
+        "Geist Mono": "/fonts/GeistMono.ttf",
+    }
+
     # ── 窗口设置 ──
-    page.title = "AliveDaily"
+    page.title = "MaoDaily"
     page.window.width = 820
     page.window.height = 640
     page.window.min_width = 680

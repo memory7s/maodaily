@@ -5,6 +5,7 @@
 
 import flet as ft
 from datetime import datetime, date, timedelta
+from .ricons import RI, ri
 from .theme import PRIMARY, PRIMARY_LIGHT, TEXT_PRIMARY, TEXT_SECONDARY, CARD_BG, BG
 
 WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"]
@@ -30,16 +31,12 @@ class CalendarView(ft.Container):
         # 月份标题 + 导航按钮
         self._month_label = ft.Text("", size=18, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY)
         self._prev_btn = ft.IconButton(
-            icon=ft.Icons.CHEVRON_LEFT,
-            icon_color=TEXT_SECONDARY,
-            icon_size=20,
+            icon=ri(RI.ARROW_LEFT_S, size=22, color=TEXT_SECONDARY),
             on_click=self._prev_month,
             tooltip="上个月",
         )
         self._next_btn = ft.IconButton(
-            icon=ft.Icons.CHEVRON_RIGHT,
-            icon_color=TEXT_SECONDARY,
-            icon_size=20,
+            icon=ri(RI.ARROW_RIGHT_S, size=22, color=TEXT_SECONDARY),
             on_click=self._next_month,
             tooltip="下个月",
         )
@@ -231,8 +228,10 @@ class CalendarView(ft.Container):
         t = theme or {}
         self.bgcolor = t.get("CARD_BG", CARD_BG)
         self._month_label.color = t.get("TEXT_PRIMARY", TEXT_PRIMARY)
-        self._prev_btn.icon_color = t.get("TEXT_SECONDARY", TEXT_SECONDARY)
-        self._next_btn.icon_color = t.get("TEXT_SECONDARY", TEXT_SECONDARY)
+        if isinstance(self._prev_btn.icon, ft.Text):
+            self._prev_btn.icon.color = t.get("TEXT_SECONDARY", TEXT_SECONDARY)
+        if isinstance(self._next_btn.icon, ft.Text):
+            self._next_btn.icon.color = t.get("TEXT_SECONDARY", TEXT_SECONDARY)
 
         text_secondary = t.get("TEXT_SECONDARY", TEXT_SECONDARY)
         for control in self._weekday_row.controls:
@@ -241,7 +240,19 @@ class CalendarView(ft.Container):
 
         divider_color = t.get("DIVIDER", "#E0E0E0")
         shadow_color = t.get("SHADOW", "#1A000000")
-        self.shadow = ft.BoxShadow(blur_radius=6, color=shadow_color, offset=ft.Offset(0, 2))
+        self.shadow = ft.BoxShadow(
+            blur_radius=t.get("SHADOW_BLUR", 6),
+            color=shadow_color,
+            offset=ft.Offset(t.get("SHADOW_X", 0), t.get("SHADOW_Y", 2)),
+        )
+        border_color = t.get("CARD_BORDER", "transparent")
+        border_width = t.get("CARD_BORDER_WIDTH", 0)
+        if border_color in (None, "transparent") or border_width == 0:
+            self.border = None
+        else:
+            side = ft.BorderSide(border_width, border_color)
+            self.border = ft.Border(left=side, right=side, top=side, bottom=side)
+        self.border_radius = ft.BorderRadius.all(t.get("RADIUS_CARD", 10))
 
         # 更新日历容器内的分割线
         outer_col = self.content

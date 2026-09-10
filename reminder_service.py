@@ -9,7 +9,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 
-DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "tasks.json")
+# 统一使用 task_manager 中的数据文件路径，确保提醒服务与任务管理器读写同一份数据
+from task_manager import DATA_FILE
 
 # 全局引用
 _reminder_thread = None
@@ -130,7 +131,10 @@ def start_reminder_service(page=None):
 
     def _loop():
         time.sleep(2)
-        print("[ReminderService] 🚀 开始轮询（间隔 10s）...")
+        try:
+            print("[ReminderService] 🚀 开始轮询（间隔 10s）...")
+        except Exception:
+            pass  # 输出流不可编码时（如重定向到 GBK 文件）不能让线程死掉
         while True:
             try:
                 state["notified"] = _check_and_notify(state["notified"])

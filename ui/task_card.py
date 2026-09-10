@@ -3,16 +3,17 @@
 """
 
 import flet as ft
+from .ricons import RI, ri
 from .theme import (
     PRIMARY, PRIMARY_LIGHT, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY,
     TEXT_DISABLED, DANGER, TAG_COLORS, PRIORITY_COLORS,
 )
 
-# ── 状态图标 ──
-ICON_UNCHECKED = "○"
-ICON_CHECKED = "●"
-ICON_STEP_UNCHECKED = "○"
-ICON_STEP_CHECKED = "✓"
+# ── 状态图标（RemixIcon 字形，需配 font_family=RI.FONT）──
+ICON_UNCHECKED = RI.CIRCLE
+ICON_CHECKED = RI.CIRCLE_DONE
+ICON_STEP_UNCHECKED = RI.CIRCLE
+ICON_STEP_CHECKED = RI.CHECK
 
 
 class StepRow(ft.Row):
@@ -34,7 +35,7 @@ class StepRow(ft.Row):
         # 勾选图标
         chk_text = ICON_STEP_CHECKED if completed else ICON_STEP_UNCHECKED
         chk_color = TEXT_DISABLED if completed else TEXT_SECONDARY
-        self.chk = ft.Text(chk_text, size=14, color=chk_color, width=20)
+        self.chk = ft.Text(chk_text, size=14, color=chk_color, width=20, font_family=RI.FONT)
 
         # 描述文字
         desc_color = TEXT_DISABLED if completed else TEXT_SECONDARY
@@ -52,7 +53,7 @@ class StepRow(ft.Row):
         )
 
         # 删除按钮
-        self.del_btn = ft.Text("✕", size=11, color="#CCCCCC")
+        self.del_btn = ft.Text(RI.CLOSE, size=12, color="#CCCCCC", font_family=RI.FONT)
 
         super().__init__(
             controls=[
@@ -143,7 +144,7 @@ class TaskCard(ft.Container):
         # 勾选圈
         chk_text = ICON_CHECKED if completed else ICON_UNCHECKED
         chk_color = TEXT_DISABLED if completed else PRIMARY
-        self.chk = ft.Text(chk_text, size=16, color=chk_color)
+        self.chk = ft.Text(chk_text, size=16, color=chk_color, font_family=RI.FONT)
 
         # 标题
         title_color = TEXT_DISABLED if completed else TEXT_PRIMARY
@@ -165,15 +166,17 @@ class TaskCard(ft.Container):
             padding=ft.Padding.symmetric(horizontal=4),
         )
 
-        # 优先级标记：标星任务 ⭐，未标星 ☆
+        # 优先级标记：标星任务实心星，未标星空心星
         self.priority_dot = ft.Text(
-            "⭐" if priority in ("高", "high") else "☆",
+            RI.STAR_FILL if priority in ("高", "high") else RI.STAR_LINE,
             size=16, width=20, text_align=ft.TextAlign.CENTER,
             color="#FF8700" if priority in ("高", "high") else "#CCCCCC",
+            font_family=RI.FONT,
         )
 
 # ⋯ 菜单按钮（标记完成 / 标星 / 分类 / 删除）
         menu_btn = ft.PopupMenuButton(
+            icon=ri(RI.MORE, size=18, color=TEXT_SECONDARY),
             items=[
                 ft.PopupMenuItem(
                     content=ft.Text("标记为未完成" if completed else "标记为已完成"),
@@ -215,7 +218,7 @@ class TaskCard(ft.Container):
         # ---- 任务头栏 ----
         # 提醒图标（有提醒时显示小闹钟）
         has_reminder = bool(task_data.get('reminder_date'))
-        self.reminder_icon = ft.Text("🔔", size=14, visible=has_reminder)
+        self.reminder_icon = ft.Text(RI.BELL, size=14, visible=has_reminder, font_family=RI.FONT)
 
         header = ft.Row(
             controls=[
@@ -249,7 +252,7 @@ class TaskCard(ft.Container):
                     expand=True,
                     on_submit=self._handle_add_step,
                 ),
-                ft.Text("+", size=16, color=PRIMARY),
+                ft.Text(RI.ADD, size=16, color=PRIMARY, font_family=RI.FONT),
             ],
             spacing=4,
             visible=False,
@@ -371,6 +374,31 @@ class TaskCard(ft.Container):
         self._add_step_input.visible = expanded
         self.update()
 
+    def _apply_card_style(self):
+        """应用主题到卡片外观（边框/阴影/圆角），支持 Neo 硬边框风格"""
+        theme = self._theme or {}
+        # 卡片背景
+        self.bgcolor = theme.get("CARD_BG", CARD_BG)
+        # 边框: 亮色无边框(transparent)，暗色 1px，Neo 2px 硬黑边
+        border_color = theme.get("CARD_BORDER", "transparent")
+        border_width = theme.get("CARD_BORDER_WIDTH", 0)
+        if border_color in (None, "transparent") or border_width == 0:
+            self.border = None
+        else:
+            side = ft.BorderSide(border_width, border_color)
+            self.border = ft.Border(
+                left=side, right=side, top=side, bottom=side
+            )
+        # 阴影: Neo 用无模糊硬偏移阴影
+        self.shadow = ft.BoxShadow(
+            blur_radius=theme.get("SHADOW_BLUR", 6),
+            color=theme.get("SHADOW", "#1A000000"),
+            offset=ft.Offset(theme.get("SHADOW_X", 0), theme.get("SHADOW_Y", 2)),
+        )
+        # 圆角
+        radius = theme.get("RADIUS_CARD", 10)
+        self.border_radius = ft.BorderRadius.all(radius)
+
     def update_theme(self, theme: dict):
         """更新卡片主题颜色"""
         self._theme = theme
@@ -378,13 +406,7 @@ class TaskCard(ft.Container):
         priority = self._data.get("priority", "")
         tag = self._data.get("tag", "")
 
-        # 卡片背景
-        self.bgcolor = theme.get("CARD_BG", CARD_BG)
-        self.shadow = ft.BoxShadow(
-            blur_radius=6,
-            color=theme.get("SHADOW", "#1A000000"),
-            offset=ft.Offset(0, 2),
-        )
+        self._apply_card_style()
 
         # 勾选圈
         self.chk.color = theme.get("TEXT_DISABLED", TEXT_DISABLED) if completed else theme.get("PRIMARY", PRIMARY)
