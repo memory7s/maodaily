@@ -39,8 +39,8 @@
 
 ```bash
 # 1. 克隆仓库 / Clone
-git clone https://github.com/memory7s/alive-daily.git
-cd alive-daily
+git clone https://github.com/memory7s/maodaily.git
+cd maodaily
 
 # 2. 创建虚拟环境 / Create venv
 python -m venv .venv
@@ -103,7 +103,7 @@ MaoDaily 是「猫系列」的一员。欢迎来逛逛我们的其他项目：
 ### 🐈 MaoDaily（就是本项目）
 > 桌面每日计划工具
 
-**https://github.com/memory7s/alive-daily**
+**https://github.com/memory7s/maodaily**
 
 ---
 
