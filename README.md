@@ -123,7 +123,7 @@ MaoDaily 是「猫系列」的一员。欢迎来逛逛我们的其他项目：
 | ⚡ 爱发电 | https://afdian.com/a/memory7s | ✅ 可用 |
 | ☕ Buy Me a Coffee | (待开通) | 🔜 即将上线 |
 
-**爱发电赞助：** 目前设有一档月费方案（¥10/月），也接受一次性打赏。欢迎来主页逛逛 👉 https://afdian.com/a/memory7s
+**爱发电赞助：** 目前设有一档月费方案（¥6/月），也接受一次性打赏。欢迎来主页逛逛 👉 https://afdian.com/a/memory7s
 
 ---
 
