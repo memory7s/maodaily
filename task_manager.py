@@ -8,16 +8,66 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-# 数据文件路径（存放在项目日志目录，方便携带迁移）
+# 数据目录解析
+# - 开发版（源码运行）: 数据沿用 D:\Project\alivedaily项目日志\data，方便携带迁移
+# - 发布版（exe）: 数据存到 Windows 标准位置 %APPDATA%\MaoDaily\data，
+#   不在程序目录旁生成任何额外文件夹
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-if os.sep.join(['build', 'windows', 'app']) in _script_dir:
-    # 打包版: build/windows/app/task_manager.py → 上4层到 D:\Project
-    _root = os.path.normpath(os.path.join(_script_dir, '..', '..', '..', '..'))
+_RELEASE_MARKER = os.path.join(_script_dir, '..', '.release')
+
+
+def _is_packaged() -> bool:
+    """发布版判定：flet 构建产物路径，或发布包根目录存在 .release 标记文件"""
+    if os.sep.join(['build', 'windows', 'app']) in _script_dir:
+        return True
+    return os.path.exists(_RELEASE_MARKER)
+
+
+if _is_packaged():
+    _base = os.environ.get('APPDATA') or os.path.expanduser('~')
+    DATA_DIR = os.path.join(_base, 'MaoDaily', 'data')
 else:
-    # 开发版: D:\Project/alive-daily/task_manager.py → 上1层到 D:\Project
     _root = os.path.normpath(os.path.join(_script_dir, '..'))
-DATA_DIR = os.path.join(_root, 'alivedaily项目日志', 'data')
+    DATA_DIR = os.path.join(_root, 'alivedaily项目日志', 'data')
 DATA_FILE = os.path.join(DATA_DIR, "tasks.json")
+
+
+def _migrate_legacy_data():
+    """发布版首次运行时，把旧位置的任务数据搬过来（一次性）。
+
+    旧位置候选：
+    1. 程序上4层\alivedaily项目日志\data（覆盖构建产物目录运行的情况）
+    2. 开发期固定数据盘位置 D:\Project\alivedaily项目日志\data（老用户兜底，
+       仅用于一次性迁移，新用户该路径不存在则安静跳过）
+    迁移前提：新位置还没有数据。绝不会在新位置以外新建任何文件夹。
+    """
+    if not _is_packaged():
+        return
+    if os.path.exists(DATA_FILE):
+        return
+    candidates = [
+        os.path.join(
+            os.path.normpath(os.path.join(_script_dir, '..', '..', '..', '..')),
+            'alivedaily项目日志', 'data'),
+        os.path.join(
+            os.environ.get('MAODAILY_LEGACY_ROOT', r'D:\Project'),
+            'alivedaily项目日志', 'data'),
+    ]
+    legacy = next((c for c in candidates if os.path.exists(os.path.join(c, 'tasks.json'))), None)
+    if legacy is None:
+        return
+    import shutil
+    os.makedirs(DATA_DIR, exist_ok=True)
+    for name in ('tasks.json', 'ui_prefs.json'):
+        src = os.path.join(legacy, name)
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(DATA_DIR, name))
+    legacy_b = os.path.join(legacy, 'backups')
+    if os.path.isdir(legacy_b):
+        shutil.copytree(legacy_b, os.path.join(DATA_DIR, 'backups'), dirs_exist_ok=True)
+
+
+_migrate_legacy_data()
 
 
 class TaskStep:
