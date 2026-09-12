@@ -1,7 +1,7 @@
 # 🐱 MaoDaily — 桌面每日计划工具
 
-> 一只猫的日常计划管家，猫系列品牌家族的一员。
-> MaoDaily is a desktop daily planner with a cat soul, a proud member of the Cat Series brand family.
+> 一款桌面每日计划管理工具：任务清单、日历视图、定时提醒，一只猫模样的那种。猫系列品牌家族的一员。
+> MaoDaily is a desktop daily planner — tasks, calendar views, and reminders, with a cat soul. Part of the Cat Series brand family.
 
 <img src="assets/icon.png" alt="MaoDaily" width="128">
 
