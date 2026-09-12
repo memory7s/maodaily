@@ -3,7 +3,7 @@
 > 一只猫的日常计划管家。原 AliveDaily，现已加入「猫系列」品牌矩阵。
 > MaoDaily is a desktop daily planner with a cat soul. Formerly AliveDaily, now part of the Cat Series brand family.
 
-![MaoDaily](assets/icon.png)
+<img src="assets/icon.png" alt="MaoDaily" width="128">
 
 ## ✨ 功能特性 / Features
 
@@ -33,7 +33,7 @@
 
 | 主界面 Main Screen | 设置界面 Settings |
 |:---:|:---:|
-| ![main](assets/screenshots/main.png) | ![settings](assets/screenshots/settings.png) |
+| <img src="assets/screenshots/main.png" width="430"> | <img src="assets/screenshots/settings.png" width="430"> |
 
 ## 🚀 快速开始 / Quick Start
 
@@ -113,7 +113,7 @@ MaoDaily 是「猫系列」的一员。欢迎来逛逛我们的其他项目：
 
 **扫码赞助（微信，金额 1 / 5 / 10 元）：**
 
-![微信打赏](assets/donate/wechat-qr.jpg)
+<img src="assets/donate/wechat-qr.jpg" alt="微信打赏" width="200">
 
 **赞助平台：**
 
