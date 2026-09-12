@@ -5,6 +5,14 @@
 
 <img src="assets/icon.png" alt="MaoDaily" width="128">
 
+## 📥 下载 / Download
+
+**Windows 64 位 · 免安装 · 解压即用**
+
+👉 **[GitHub Releases：下载最新版本 / Download Latest](https://github.com/memory7s/maodaily/releases)**
+
+当前版本 **v1.0.0**（`maodaily-v1.0.0-windows-x64.zip`，约 36MB）：解压后双击 `maodaily.exe` 即可使用。任务数据存放在系统用户目录（`%APPDATA%\MaoDaily\data`），卸载时直接删除整个文件夹即可，不留痕迹。
+
 ## ✨ 功能特性 / Features
 
 - **📋 任务管理** — 添加/删除任务，多级步骤（子任务），勾选完成自动归档
