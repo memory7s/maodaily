@@ -71,8 +71,6 @@ python main.py
 - Python 3.10+
 - Flet 0.86.2（Flutter 渲染引擎）
 - 本地 JSON 存储（无数据库，无网络请求）
-- RemixIcon v4.6.0（图标字体）
-- Geist / Geist Mono（英文标题字体）
 
 ## 📦 打包 / Build
 
